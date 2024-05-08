@@ -9,7 +9,7 @@ set_property( GLOBAL PROPERTY ALLOW_DUPLICATE_CUSTOM_TARGETS ON )
 project( sirikali )
 
 set( PGR_VERSION "1.5.1" )
-set( COPYRIGHT_YEARS "2016-2023" )
+set( COPYRIGHT_YEARS "2016-2024" )
 
 set( CMAKE_CXX_STANDARD 14 )
 
@@ -77,7 +77,7 @@ else()
 endif()
 
 if( APPLE )
-        file( WRITE ${PROJECT_BINARY_DIR}/locale_path.h "\n#define TRANSLATION_PATH \"${CMAKE_INSTALL_PREFIX}/sirikali.app/Contents/Resources/\"\n")
+	file( WRITE ${PROJECT_BINARY_DIR}/locale_path.h "\n#define TRANSLATION_PATH \"${CMAKE_INSTALL_PREFIX}/sirikali.app/Contents/Resources/\"\n")
 else()
 	file( WRITE ${PROJECT_BINARY_DIR}/locale_path.h "\n#define TRANSLATION_PATH \"${CMAKE_INSTALL_FULL_DATADIR}/sirikali/translations/\"\n")
 endif()
@@ -88,58 +88,71 @@ if( NOT DEFINED INTERNAL_LXQT_WALLET )
 	set( INTERNAL_LXQT_WALLET "false" )
 endif()
 
-if( DEFINED QT5 AND NOT QT5 )
-	message( FATAL_ERROR "Qt4 Build is no longer supported" )
-endif()
-
 if(NOT DEFINED NONETWORKSUPPORT)
-   set( NONETWORKSUPPORT "true" )
+	set( NONETWORKSUPPORT "true" )
 endif()
 
-set( QT5 "true" )
+option(BUILD_WITH_QT6 "Build with Qt 6" OFF)
 
 if( WIN32 )
-    set( INTERNAL_LXQT_WALLET "true" )
+	set( INTERNAL_LXQT_WALLET "true" )
 else()
 
-    find_file( GCRYPT_INCLUDE_FILE gcrypt.h )
-    find_path( GCRYPT_INCLUDE_PATH gcrypt.h )
+	find_file( GCRYPT_INCLUDE_FILE gcrypt.h )
+	find_path( GCRYPT_INCLUDE_PATH gcrypt.h )
 
-    add_definitions( -I${GCRYPT_INCLUDE_PATH} )
+	add_definitions( -I${GCRYPT_INCLUDE_PATH} )
 
-    find_library( GCRYPT_LIBRARY gcrypt )
+	find_library( GCRYPT_LIBRARY gcrypt )
 
-    if( NOT GCRYPT_INCLUDE_FILE )
-            MESSAGE( FATAL_ERROR "could not find gcrypt header file" )
-    else()
-            MESSAGE( STATUS "found gcrypt header file at: ${GCRYPT_INCLUDE_FILE}" )
-    endif()
+	if( NOT GCRYPT_INCLUDE_FILE )
+		MESSAGE( FATAL_ERROR "could not find gcrypt header file" )
+	else()
+		MESSAGE( STATUS "found gcrypt header file at: ${GCRYPT_INCLUDE_FILE}" )
+	endif()
 
-    if( NOT GCRYPT_LIBRARY )
-            MESSAGE( FATAL_ERROR "could not find gcrypt library" )
-    else()
-            get_filename_component( GCRYPT_LIBRARY_PATH ${GCRYPT_LIBRARY} DIRECTORY )
+	if( NOT GCRYPT_LIBRARY )
+		MESSAGE( FATAL_ERROR "could not find gcrypt library" )
+	else()
+		get_filename_component( GCRYPT_LIBRARY_PATH ${GCRYPT_LIBRARY} DIRECTORY )
 
-            MESSAGE( STATUS "found gcrypt library at: ${GCRYPT_LIBRARY}" )
-            MESSAGE( STATUS "adding library search path of: ${GCRYPT_LIBRARY_PATH}" )
-
-    endif()
+		MESSAGE( STATUS "found gcrypt library at: ${GCRYPT_LIBRARY}" )
+		MESSAGE( STATUS "adding library search path of: ${GCRYPT_LIBRARY_PATH}" )
+	endif()
 endif()
 
-if( UNIX AND NOT APPLE )
+if(BUILD_WITH_QT6)
+	if( UNIX AND NOT APPLE )
 
-	find_package( Qt5 COMPONENTS Core Widgets Network DBus REQUIRED )
+		find_package( Qt6 COMPONENTS Core Widgets Network DBus REQUIRED )
 
-	message( STATUS "Found Qt5Widgets, version  ${Qt5Widgets_VERSION}" )
-	message( STATUS "Found Qt5Core, version  ${Qt5Core_VERSION}" )
-	message( STATUS "Found Qt5Network, version  ${Qt5Network_VERSION}" )
-	message( STATUS "Found Qt5DBus, version  ${Qt5DBus_VERSION}" )
+		message( STATUS "Found Qt6Widgets, version  ${Qt6Widgets_VERSION}" )
+		message( STATUS "Found Qt6Core, version  ${Qt6Core_VERSION}" )
+		message( STATUS "Found Qt6Network, version  ${Qt6Network_VERSION}" )
+		message( STATUS "Found Qt6DBus, version  ${Qt6DBus_VERSION}" )
+	else()
+		find_package( Qt5 COMPONENTS Core Widgets Network REQUIRED )
+
+		message( STATUS "Found Qt6Widgets, version  ${Qt5Widgets_VERSION}" )
+		message( STATUS "Found Qt6Core, version  ${Qt5Core_VERSION}" )
+		message( STATUS "Found Qt6Network, version  ${Qt5Network_VERSION}" )
+	endif()
 else()
-	find_package( Qt5 COMPONENTS Core Widgets Network REQUIRED )
+	if( UNIX AND NOT APPLE )
 
-	message( STATUS "Found Qt5Widgets, version  ${Qt5Widgets_VERSION}" )
-	message( STATUS "Found Qt5Core, version  ${Qt5Core_VERSION}" )
-	message( STATUS "Found Qt5Network, version  ${Qt5Network_VERSION}" )
+		find_package( Qt5 COMPONENTS Core Widgets Network DBus REQUIRED )
+
+		message( STATUS "Found Qt5Widgets, version  ${Qt5Widgets_VERSION}" )
+		message( STATUS "Found Qt5Core, version  ${Qt5Core_VERSION}" )
+		message( STATUS "Found Qt5Network, version  ${Qt5Network_VERSION}" )
+		message( STATUS "Found Qt5DBus, version  ${Qt5DBus_VERSION}" )
+	else()
+		find_package( Qt5 COMPONENTS Core Widgets Network REQUIRED )
+
+		message( STATUS "Found Qt5Widgets, version  ${Qt5Widgets_VERSION}" )
+		message( STATUS "Found Qt5Core, version  ${Qt5Core_VERSION}" )
+		message( STATUS "Found Qt5Network, version  ${Qt5Network_VERSION}" )
+	endif()
 endif()
 
 #pkg_check_modules( MCHUNGU_TASK mhogomchungu_task )
@@ -159,14 +172,14 @@ file(WRITE  ${PROJECT_BINARY_DIR}/network_support.h "\n#define HAS_NETWORK_SUPPO
 
 if( MCHUNGU_TASK_FOUND )
 
-        message( STATUS "---------------------------------------------------------------------------" )
+	message( STATUS "---------------------------------------------------------------------------" )
 	message( STATUS "mhogomchungu_task library will be provided by an external library" )
 	message( STATUS "---------------------------------------------------------------------------" )
 
 	include_directories( "${MCHUNGU_TASK_INCLUDEDIR}" )
 	link_directories( "${MCHUNGU_TASK_LIBDIR}" )
 else()
-        message( STATUS "---------------------------------------------------------------------------" )
+	message( STATUS "---------------------------------------------------------------------------" )
 	message( STATUS "mhogomchungu_task library will be provided by an internal library" )
 	message( STATUS "---------------------------------------------------------------------------" )
 	include_directories( src/3rdParty/tasks )
@@ -175,7 +188,7 @@ endif()
 
 if( INTERNAL_LXQT_WALLET )
 
-        message( STATUS "---------------------------------------------------------------------------" )
+	message( STATUS "---------------------------------------------------------------------------" )
 	message( STATUS "lxqt wallet support will be provided by an internal library" )
 	message( STATUS "---------------------------------------------------------------------------" )
 
@@ -183,11 +196,11 @@ if( INTERNAL_LXQT_WALLET )
 	include_directories( ${PROJECT_SOURCE_DIR}/src/3rdParty/lxqt_wallet/frontend )
 	include_directories( ${PROJECT_BINARY_DIR}/src/3rdParty/lxqt_wallet/frontend )
 else()
-        pkg_check_modules( LXQT_WALLET lxqt-wallet )
+	pkg_check_modules( LXQT_WALLET lxqt-wallet )
 
 	if( NOT LXQT_WALLET_FOUND )
 
-	        message( STATUS "ERROR: could not find lxqt_wallet package" )
+		message( STATUS "ERROR: could not find lxqt_wallet package" )
 		message( STATUS "---------------------------------------------------------------------------" )
 		message( STATUS "lxqt wallet support will be provided by an internal library" )
 		message( STATUS "---------------------------------------------------------------------------" )
@@ -197,16 +210,16 @@ else()
 
 		ADD_SUBDIRECTORY( src/3rdParty/lxqt_wallet )
 	else()
-	        if( LXQT_WALLET_VERSION VERSION_GREATER "3.1.0"  )
+		if( LXQT_WALLET_VERSION VERSION_GREATER "3.1.0"  )
 
-		        include_directories( ${LXQT_WALLET_INCLUDEDIR} )
+			include_directories( ${LXQT_WALLET_INCLUDEDIR} )
 			link_directories( ${LXQT_WALLET_LIBDIR} )
 
 			message( STATUS "---------------------------------------------------------------------------" )
 			message( STATUS "lxqt wallet support will be provided by an external library" )
 			message( STATUS "---------------------------------------------------------------------------" )
 		else()
-		        message( STATUS "---------------------------------------------------------------------------" )
+			message( STATUS "---------------------------------------------------------------------------" )
 
 			message( FATAL_ERROR "---------------------------------------------------------------------------\nInstalled version of lxqt_wallet is too old(<3.2.0)\nPlease install a more receant version from: https://github.com/lxqt/lxqt_wallet\n---------------------------------------------------------------------------" )
 
@@ -266,7 +279,7 @@ set( MOC_FILES
 		src/engines/fscryptcreateoptions.h
  )
 
-set( SRC 	src/dialogok.cpp
+set( SRC 		src/dialogok.cpp
 		src/main.cpp
 		src/systemsignalhandler.cpp
 		src/crypto.cpp
@@ -362,30 +375,51 @@ endif()
 
 link_directories( ${GCRYPT_LIBRARY_PATH} )
 
-if( WIN32 )
-    TARGET_LINK_LIBRARIES( sirikali ${Qt5Widgets_LIBRARIES} ${Qt5Core_LIBRARIES} ${Qt5Widgets_LIBRARIES} ${Qt5Network_LIBRARIES} mhogomchungu_task lxqt-wallet )
-endif()
+if(BUILD_WITH_QT6)
+	if( WIN32 )
+		    TARGET_LINK_LIBRARIES( sirikali ${Qt6Widgets_LIBRARIES} ${Qt6Core_LIBRARIES} ${Qt6Widgets_LIBRARIES} ${Qt6Network_LIBRARIES} mhogomchungu_task lxqt-wallet )
+	endif()
 
-if( APPLE )
-    TARGET_LINK_LIBRARIES( sirikali ${Qt5Widgets_LIBRARIES} ${Qt5Core_LIBRARIES} ${Qt5Widgets_LIBRARIES} ${Qt5Network_LIBRARIES} ${library_pwquality} ${GCRYPT_LIBRARY} mhogomchungu_task lxqt-wallet -L${GCRYPT_LIBRARY_PATH})
-endif()
+	if( APPLE )
+		TARGET_LINK_LIBRARIES( sirikali ${Qt6Widgets_LIBRARIES} ${Qt6Core_LIBRARIES} ${Qt6Widgets_LIBRARIES} ${Qt6Network_LIBRARIES} ${library_pwquality} ${GCRYPT_LIBRARY} mhogomchungu_task lxqt-wallet -L${GCRYPT_LIBRARY_PATH})
+	endif()
 
-if( UNIX AND NOT APPLE )
-    TARGET_LINK_LIBRARIES( sirikali ${Qt5DBus_LIBRARIES} ${Qt5Widgets_LIBRARIES} ${Qt5Core_LIBRARIES} ${Qt5Widgets_LIBRARIES} ${Qt5Network_LIBRARIES} ${library_pwquality} ${GCRYPT_LIBRARY} mhogomchungu_task lxqt-wallet -L${GCRYPT_LIBRARY_PATH} -Wl,-znow)
-endif()
-
-message( STATUS "---------------------------------------------------------------------------" )
-message( STATUS "Building GUI components using Qt5" )
-message( STATUS "---------------------------------------------------------------------------\n\n" )
-
-if( WIN32 )
-    ADD_SUBDIRECTORY( src/sirikali_cppcryptfs )
-endif()
-
-if( WIN32 )
-    set_target_properties( sirikali PROPERTIES COMPILE_FLAGS "-Wextra -Wall -s -pedantic" )
+	if( UNIX AND NOT APPLE )
+		TARGET_LINK_LIBRARIES( sirikali ${Qt6DBus_LIBRARIES} ${Qt6Widgets_LIBRARIES} ${Qt6Core_LIBRARIES} ${Qt6Widgets_LIBRARIES} ${Qt6Network_LIBRARIES} ${library_pwquality} ${GCRYPT_LIBRARY} mhogomchungu_task lxqt-wallet -L${GCRYPT_LIBRARY_PATH} -Wl,-znow)
+	endif()
 else()
-    set_target_properties( sirikali PROPERTIES COMPILE_FLAGS "-Wextra -Wall -s -fPIC -pedantic" )
+	if( WIN32 )
+		    TARGET_LINK_LIBRARIES( sirikali ${Qt5Widgets_LIBRARIES} ${Qt5Core_LIBRARIES} ${Qt5Widgets_LIBRARIES} ${Qt5Network_LIBRARIES} mhogomchungu_task lxqt-wallet )
+	endif()
+
+	if( APPLE )
+		TARGET_LINK_LIBRARIES( sirikali ${Qt5Widgets_LIBRARIES} ${Qt5Core_LIBRARIES} ${Qt5Widgets_LIBRARIES} ${Qt5Network_LIBRARIES} ${library_pwquality} ${GCRYPT_LIBRARY} mhogomchungu_task lxqt-wallet -L${GCRYPT_LIBRARY_PATH})
+	endif()
+
+	if( UNIX AND NOT APPLE )
+		TARGET_LINK_LIBRARIES( sirikali ${Qt5DBus_LIBRARIES} ${Qt5Widgets_LIBRARIES} ${Qt5Core_LIBRARIES} ${Qt5Widgets_LIBRARIES} ${Qt5Network_LIBRARIES} ${library_pwquality} ${GCRYPT_LIBRARY} mhogomchungu_task lxqt-wallet -L${GCRYPT_LIBRARY_PATH} -Wl,-znow)
+	endif()
+endif()
+
+if(BUILD_WITH_QT6)
+	message( STATUS "---------------------------------------------------------------------------" )
+	message( STATUS "Building GUI components using Qt6" )
+	message( STATUS "---------------------------------------------------------------------------\n\n" )
+else()
+	message( STATUS "---------------------------------------------------------------------------" )
+	message( STATUS "Building GUI components using Qt5" )
+	message( STATUS "---------------------------------------------------------------------------\n\n" )
+endif()
+
+
+if( WIN32 )
+	ADD_SUBDIRECTORY( src/sirikali_cppcryptfs )
+endif()
+
+if( WIN32 )
+	set_target_properties( sirikali PROPERTIES COMPILE_FLAGS "-Wextra -Wall -s -pedantic" )
+else()
+	set_target_properties( sirikali PROPERTIES COMPILE_FLAGS "-Wextra -Wall -s -fPIC -pedantic" )
 endif()
 
 file( WRITE ${PROJECT_BINARY_DIR}/siriPolkit.h "\n#define siriPolkitPath \"${CMAKE_INSTALL_PREFIX}/bin/sirikali.pkexec\"" )
@@ -522,23 +556,13 @@ endif()
 
 endif()
 
-if( WIN32 )
+if(BUILD_WITH_QT6)
+	set( INSTALLER_FILE_NAME "sirikali_windows_installer_Qt6.iss" )
+else()
+	set( INSTALLER_FILE_NAME "sirikali_windows_installer_Qt5.iss" )
+endif()
 
-    find_path( libstdc_PATH libstdc++-6.dll )
-
-    find_path( gcc_PATH gcc.exe )
-
-    find_path( windeployqt_PATH windeployqt.exe PATHS "${CMAKE_PREFIX_PATH}/bin" )
-
-file( WRITE ${PROJECT_BINARY_DIR}/sirikali_windows_installer_commands.txt
-"
-set PATH=${gcc_PATH};${libstdc_PATH};%PATH%\r\n
-${windeployqt_PATH}/windeployqt --release sirikali.exe\r\n
-")
-
-
-
-file( WRITE ${PROJECT_BINARY_DIR}/sirikali_windows_installer_Qt5.iss
+file( WRITE ${PROJECT_BINARY_DIR}/${INSTALLER_FILE_NAME}
 "
 ; Script generated by the Inno Setup Script Wizard.
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
@@ -552,7 +576,6 @@ file( WRITE ${PROJECT_BINARY_DIR}/sirikali_windows_installer_Qt5.iss
 #define MyEXELocation \"${PROJECT_BINARY_DIR}\\sirikali.exe\"
 #define MyEXELocation1 \"${PROJECT_BINARY_DIR}\\src\\sirikali_cppcryptfs\\sirikali_cppcryptfs.exe\"
 #define MyOutPutPath  \"${OUTPUT_PATH}\"
-#define MyGcryptLibraryPath \"C:\\projects\\sirikali\\libs\\lib\\\"
 #define MySourcesPath \"${SOURCE_PATH}\"
 
 [Setup]
