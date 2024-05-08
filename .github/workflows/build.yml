@@ -81,19 +81,19 @@ jobs:
       run: cmake -DOUTPUT_BASE_NAME=SiriKaliQt5 -DLIBRARIES_LOCATION=${{github.workspace}}\SiriKali.git\ -DOUTPUT_PATH=${{github.workspace}}\ -DSOURCE_PATH=${{github.workspace}}\SiriKali\ -DCMAKE_VERBOSE_MAKEFILE=TRUE -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -G "CodeBlocks - MinGW Makefiles" -S ${{github.workspace}}/SiriKali/ -B ${{github.workspace}}/SiriKali/build5
     -
       name: Print installer script for Qt5
-      run : get-content ${{github.workspace}}\MD\build5\sirikali_windows_installer_Qt5.iss
+      run : get-content ${{github.workspace}}\SiriKali\build5\sirikali_windows_installer_Qt5.iss
     -
       name: Update version.h for Qt5
       run: |
         $content = [System.IO.File]::ReadAllText("${{github.workspace}}\SiriKali\build5\version.h").Replace("git_tag",${{ env.GIT_VERSION_NUMBER }})
-        [System.IO.File]::WriteAllText("${{github.workspace}}\MD\build5\version.h",$content )
+        [System.IO.File]::WriteAllText("${{github.workspace}}\SiriKali\build5\version.h",$content )
     -
       name: Build Project for Qt5
-      run: cmake --build ${{github.workspace}}/MD/build5
+      run: cmake --build ${{github.workspace}}/SiriKali/build5
     -
       name: Prepare release date
       run: |
-        $data = [System.IO.File]::ReadAllText("${{github.workspace}}\MD\build5\version.h")
+        $data = [System.IO.File]::ReadAllText("${{github.workspace}}\SiriKali\build5\version.h")
 
         $versionInfoLines = $data.Split([Environment]::NewLine, [System.StringSplitOptions]::RemoveEmptyEntries)
 
