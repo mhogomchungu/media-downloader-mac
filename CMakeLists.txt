@@ -556,7 +556,9 @@ endif()
 
 endif()
 
-if(BUILD_WITH_QT6)
+if( WIN32 )
+
+if( BUILD_WITH_QT6 )
 	set( INSTALLER_FILE_NAME "sirikali_windows_installer_Qt6.iss" )
 else()
 	set( INSTALLER_FILE_NAME "sirikali_windows_installer_Qt5.iss" )
