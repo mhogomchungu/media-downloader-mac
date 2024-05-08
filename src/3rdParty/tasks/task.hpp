@@ -1286,8 +1286,12 @@ namespace Task
 					{
 						this->setProcessEnvironment( env ) ;
 
+						#ifndef Q_OS_WIN
+
 						#if QT_VERSION >= QT_VERSION_CHECK( 6,0,0 )
 							this->setChildProcessModifier( m_function ) ;
+						#endif
+
 						#endif
 					}
 					#if QT_VERSION < QT_VERSION_CHECK( 6,0,0 )
