@@ -157,9 +157,9 @@ static QString _errorMsg( DWORD err,const QString& path )
 
 std::pair< bool,QString > driveHasSupportedFileSystem( const QString& path )
 {
-	auto a = path.mid( 0,1 ).toLatin1()[ 0 ] ;
+	auto aa = path.mid( 0,1 ).toUtf8() ;
 
-	std::array< TCHAR,4 >rpath = { a,':','\\','\0' } ;
+	std::array< TCHAR,4 >rpath = { aa[ 0 ],':','\\','\0' } ;
 
 	std::array< TCHAR,MAX_PATH + 1 > fsname ;
 
