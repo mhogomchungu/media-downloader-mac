@@ -18,11 +18,11 @@ set(CMAKE_AUTOUIC ON)
 if(BUILD_WITH_QT6)
         find_package( Qt6 COMPONENTS Core  REQUIRED )
         add_executable(sirikali_cppcryptfs  main.cpp )
-        target_link_libraries(sirikali_cppcryptfs Qt5::Core)
+        target_link_libraries(sirikali_cppcryptfs Qt6::Core)
 else()
         find_package( Qt5 COMPONENTS Core REQUIRED )
         add_executable(sirikali_cppcryptfs  main.cpp )
-        target_link_libraries(sirikali_cppcryptfs Qt6::Core)
+        target_link_libraries(sirikali_cppcryptfs Qt5::Core)
 endif()
 
 
