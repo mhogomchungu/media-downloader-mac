@@ -22,8 +22,8 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 if(BUILD_WITH_QT6)
     include_directories(${Qt6Widgets_INCLUDE_DIRS})
-    include_directories(${Qt6Core_INCLUDE_DIRS}})
-    include_directories(${Qt6DBus_INCLUDE_DIRS}})
+    include_directories(${Qt6Core_INCLUDE_DIRS})
+    include_directories(${Qt6DBus_INCLUDE_DIRS})
 
     add_definitions(${Qt6Widgets_DEFINITIONS})
     add_definitions(${Qt6Core_DEFINITIONS})
