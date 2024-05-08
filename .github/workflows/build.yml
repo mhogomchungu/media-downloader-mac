@@ -97,7 +97,7 @@ jobs:
 
         $versionInfoLines = $data.Split([Environment]::NewLine, [System.StringSplitOptions]::RemoveEmptyEntries)
 
-        $versionInfoFirstLine = $versionInfoLines[0]
+        $versionInfoFirstLine = $versionInfoLines[1]
 
         $versionInfo = $versionInfoFirstLine.Split(" ",[System.StringSplitOptions]::RemoveEmptyEntries)[2]
 
