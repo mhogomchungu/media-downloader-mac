@@ -199,3 +199,12 @@ jobs:
       run: |
           Rename-Item -Path ${{github.workspace}}\SiriKaliQt5.exe -NewName ${{github.workspace}}\SiriKaliQt5.git.setup.exe
           Rename-Item -Path ${{github.workspace}}\SiriKaliQt6.exe -NewName ${{github.workspace}}\SiriKaliQt6.git.setup.exe
+    -        
+      name: Post Releases
+      uses: ncipollo/release-action@v1
+      with:
+        artifacts: ${{github.workspace}}\SiriKaliQt5.git.setup.exe,${{github.workspace}}\SiriKaliQt6.git.setup.exe,${{github.workspace}}\SiriKaliQt6.git.exe.zip,${{github.workspace}}\SiriKaliQt5.git.exe.zip
+        tag: "0.0.0"
+        commit: "main"
+        allowUpdates: true
+        body: "Build date and time: ${{ env.CURRENT_TIME }}\nBuild version: ${{ env.BUILD_VERSION }}"
