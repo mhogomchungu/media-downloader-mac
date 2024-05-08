@@ -127,7 +127,7 @@ else()
 	add_library(lxqt-wallet STATIC lxqt_libsecret.cpp ${KWALLET_DBUS} ${COMMON_UI_FILES} ${COMMON_SRC_FILES} ${COMMON_MOC_FILES} ${MOC_KWALLET_DBUS})
 	target_link_libraries(lxqt-wallet secretlib)
     else()
-	add_library(lxqt-wallet STATIC ${COMMON_UI_FILES}${COMMON_SRC_FILES} ${KWALLET_DBUS} ${COMMON_MOC_FILES}${MOC_KWALLET_DBUS})
+	add_library(lxqt-wallet STATIC ${COMMON_UI_FILES} ${COMMON_SRC_FILES} ${KWALLET_DBUS} ${COMMON_MOC_FILES}${MOC_KWALLET_DBUS})
     endif()
 endif()
 
