@@ -199,4 +199,3 @@ jobs:
       run: |
           Rename-Item -Path ${{github.workspace}}\SiriKaliQt5.exe -NewName ${{github.workspace}}\SiriKaliQt5.git.setup.exe
           Rename-Item -Path ${{github.workspace}}\SiriKaliQt6.exe -NewName ${{github.workspace}}\SiriKaliQt6.git.setup.exe
-    -
