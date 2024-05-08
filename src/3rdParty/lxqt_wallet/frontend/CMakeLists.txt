@@ -20,12 +20,21 @@ endif()
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-include_directories(${Qt5Widgets_INCLUDE_DIRS})
-include_directories(${Qt5Core_INCLUDE_DIRS}})
-include_directories(${Qt5DBus_INCLUDE_DIRS}})
+if(BUILD_WITH_QT6)
+    include_directories(${Qt6Widgets_INCLUDE_DIRS})
+    include_directories(${Qt6Core_INCLUDE_DIRS}})
+    include_directories(${Qt6DBus_INCLUDE_DIRS}})
 
-add_definitions(${Qt5Widgets_DEFINITIONS})
-add_definitions(${Qt5Core_DEFINITIONS})
+    add_definitions(${Qt6Widgets_DEFINITIONS})
+    add_definitions(${Qt6Core_DEFINITIONS})
+else()
+    include_directories(${Qt5Widgets_INCLUDE_DIRS})
+    include_directories(${Qt5Core_INCLUDE_DIRS}})
+    include_directories(${Qt5DBus_INCLUDE_DIRS}})
+
+    add_definitions(${Qt5Widgets_DEFINITIONS})
+    add_definitions(${Qt5Core_DEFINITIONS})
+endif()
 
 if(NOSECRETSUPPORT)
     SET(SECRET_SUPPORT "false")
@@ -97,8 +106,15 @@ set(COMMON_UI_FILES  changepassworddialog.ui password_dialog.ui)
 set(COMMON_MOC_FILES task.h changepassworddialog.h password_dialog.h)
 set(COMMON_SRC_FILES changepassworddialog.cpp password_dialog.cpp lxqt_windows_dpapi.cpp lxqt_internal_wallet.cpp lxqt_wallet.cpp lxqt_osx_keychain.cpp)
 
-Qt5_WRAP_UI(UI ${COMMON_UI_FILES})
-Qt5_WRAP_CPP(MOC ${COMMON_MOC_FILES})
+if(BUILD_WITH_QT6)
+
+    Qt6_WRAP_UI(UI ${COMMON_UI_FILES})
+    Qt6_WRAP_CPP(MOC ${COMMON_MOC_FILES})
+else()
+
+    Qt5_WRAP_UI(UI ${COMMON_UI_FILES})
+    Qt5_WRAP_CPP(MOC ${COMMON_MOC_FILES})
+endif()
 
 if(KWALLET_SUPPORT)
     Qt5_WRAP_CPP(MOC_KWALLET lxqt_kwallet.h)
@@ -123,8 +139,13 @@ endif()
 
 target_link_libraries(lxqt-wallet lxqtwallet-backend)
 
-target_link_libraries(lxqt-wallet ${Qt5Widgets_LIBRARIES})
-target_link_libraries(lxqt-wallet ${Qt5Core_LIBRARIES})
+if(BUILD_WITH_QT6)
+    target_link_libraries(lxqt-wallet ${Qt6Widgets_LIBRARIES})
+    target_link_libraries(lxqt-wallet ${Qt6Core_LIBRARIES})
+else()
+    target_link_libraries(lxqt-wallet ${Qt5Widgets_LIBRARIES})
+    target_link_libraries(lxqt-wallet ${Qt5Core_LIBRARIES})
+endif()
 
 if(WIN32)
     target_link_libraries(lxqt-wallet -lcrypt32 -lbcrypt)
