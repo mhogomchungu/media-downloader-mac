@@ -1294,7 +1294,7 @@ namespace Task
 				protected:
 					void setupChildProcess()
 					{
-						this->setingUpChildProcess() ;
+						m_function() ;
 					}
 					#endif
 				private:
