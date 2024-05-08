@@ -131,7 +131,7 @@ jobs:
       with:
           path: SiriKali/build5/sirikali_windows_installer_Qt5.iss
     -
-         name: Install Qt6
+      name: Install Qt6
       uses: jurplel/install-qt-action@v3
       with:
         version: ${{ env.QT6_VERSION }}
