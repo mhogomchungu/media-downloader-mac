@@ -122,6 +122,9 @@ else()
 endif()
 
 if(BUILD_WITH_QT6)
+
+	SET (QTVERSION "${Qt6Core_VERSION}" )
+
 	if( UNIX AND NOT APPLE )
 
 		find_package( Qt6 COMPONENTS Core Widgets Network DBus REQUIRED )
@@ -138,6 +141,8 @@ if(BUILD_WITH_QT6)
 		message( STATUS "Found Qt6Network, version  ${Qt5Network_VERSION}" )
 	endif()
 else()
+	SET (QTVERSION "${Qt5Core_VERSION}" )
+
 	if( UNIX AND NOT APPLE )
 
 		find_package( Qt5 COMPONENTS Core Widgets Network DBus REQUIRED )
@@ -164,7 +169,7 @@ file( WRITE ${PROJECT_BINARY_DIR}/version.h "
 \n
 #ifndef SIRIKALI_VERSION
 #define SIRIKALI_VERSION
-#define VERSION_STRING \"Version  : ${PGR_VERSION} (Compiled with Qt ${Qt5Core_VERSION})\\nCopyright: ${COPYRIGHT_YEARS} Francis Banyikwa,mhogomchungu@gmail.com\\nLicense  : GPLv2+\"
+#define VERSION_STRING \"Version  : ${PGR_VERSION} (Compiled with Qt ${QTVERSION})\\nCopyright: ${COPYRIGHT_YEARS} Francis Banyikwa,mhogomchungu@gmail.com\\nLicense  : GPLv2+\"
 #endif
 \n" )
 
@@ -352,9 +357,15 @@ include_directories( ${Qt5Network_INCLUDE_DIRS} )
 
 add_definitions( ${Qt5Widgets_DEFINITIONS} )
 
-QT5_WRAP_UI( UI ${UI_FILES} )
-QT5_WRAP_CPP( MOC ${MOC_FILES} )
-QT5_ADD_RESOURCES( TRAY_RC_SRCS src/icon.qrc )
+if(BUILD_WITH_QT6)
+	QT6_WRAP_UI( UI ${UI_FILES} )
+	QT6_WRAP_CPP( MOC ${MOC_FILES} )
+	QT6_ADD_RESOURCES( TRAY_RC_SRCS src/icon.qrc )
+else()
+	QT5_WRAP_UI( UI ${UI_FILES} )
+	QT5_WRAP_CPP( MOC ${MOC_FILES} )
+	QT5_ADD_RESOURCES( TRAY_RC_SRCS src/icon.qrc )
+endif()
 
 INCLUDE_DIRECTORIES( ${CMAKE_BINARY_DIR} )
 INCLUDE_DIRECTORIES( ${GCRYPT_INCLUDE_PATH} )
@@ -556,6 +567,12 @@ endif()
 
 endif()
 
+set( OutputBaseFilename "SiriKali-${PGR_VERSION}.setup" )
+
+if(OUTPUT_BASE_NAME)
+    set( OutputBaseFilename ${OUTPUT_BASE_NAME})
+endif()
+
 if( WIN32 )
 
 if( BUILD_WITH_QT6 )
@@ -596,7 +613,7 @@ SetupIconFile={#MySourcesPath}\\icons\\256x256\\sirikali.ico
 Compression=lzma
 SolidCompression=yes
 DisableProgramGroupPage=yes
-OutputBaseFilename=SiriKali-${PGR_VERSION}.setup
+OutputBaseFilename=${OutputBaseFilename}
 
 [Tasks]
 Name: \"desktopicon\"; Description: \"{cm:CreateDesktopIcon}\"; GroupDescription: \"{cm:AdditionalIcons}\"; Flags: unchecked
