@@ -197,14 +197,13 @@ jobs:
     -
       name: Rename installers
       run: |
-          $version = ${{ env.BUILD_VERSION }}.Trim()
-          Rename-Item -Path ${{github.workspace}}\SiriKaliQt5.exe -NewName ${{github.workspace}}\SiriKaliQt5-$version.setup.exe
-          Rename-Item -Path ${{github.workspace}}\SiriKaliQt6.exe -NewName ${{github.workspace}}\SiriKaliQt6-$version.setup.exe
+          Rename-Item -Path ${{github.workspace}}\SiriKaliQt5.exe -NewName ${{github.workspace}}\SiriKaliQt5-${{ env.BUILD_VERSION }}.setup.exe
+          Rename-Item -Path ${{github.workspace}}\SiriKaliQt6.exe -NewName ${{github.workspace}}\SiriKaliQt6-${{ env.BUILD_VERSION }}.setup.exe
     -
       name: Post Releases
       uses: ncipollo/release-action@v1
       with:
-        artifacts: ${{github.workspace}}\SiriKaliQt5-${{ env.BUILD_VERSION }}.Trim().setup.exe,${{github.workspace}}\SiriKaliQt6-${{ env.BUILD_VERSION }}.Trim().setup.exe,${{github.workspace}}\SiriKaliQt6-${{ env.BUILD_VERSION }}.Trim().exe.zip,${{github.workspace}}\SiriKaliQt5-${{ env.BUILD_VERSION }}.Trim().exe.zip
+        artifacts: ${{github.workspace}}\SiriKaliQt5-${{ env.BUILD_VERSION }}.setup.exe,${{github.workspace}}\SiriKaliQt6-${{ env.BUILD_VERSION }}.setup.exe,${{github.workspace}}\SiriKaliQt6-${{ env.BUILD_VERSION }}.exe.zip,${{github.workspace}}\SiriKaliQt5-${{ env.BUILD_VERSION }}.exe.zip
         tag: "0.0.0"
         commit: "main"
         allowUpdates: true
