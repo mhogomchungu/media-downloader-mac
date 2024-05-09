@@ -102,8 +102,6 @@ jobs:
         $versionInfo = $versionInfoFirstLine.Split(" ",[System.StringSplitOptions]::RemoveEmptyEntries)[2]
 
         echo "BUILD_VERSION=$versionInfo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-        echo "RELEASEVERSION=$BUILD_VERSION" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
     -
       name: Create SiriKali.git.exe.zip
       run: |
@@ -199,13 +197,14 @@ jobs:
     -
       name: Rename installers
       run: |
-          Rename-Item -Path ${{github.workspace}}\SiriKaliQt5.exe -NewName ${{github.workspace}}\SiriKaliQt5-${{ env.RELEASEVERSION }}.setup.exe
-          Rename-Item -Path ${{github.workspace}}\SiriKaliQt6.exe -NewName ${{github.workspace}}\SiriKaliQt6-${{ env.RELEASEVERSION }}.setup.exe
+          $version = ${{ env.BUILD_VERSION }}.Trim()
+          Rename-Item -Path ${{github.workspace}}\SiriKaliQt5.exe -NewName ${{github.workspace}}\SiriKaliQt5-$version.setup.exe
+          Rename-Item -Path ${{github.workspace}}\SiriKaliQt6.exe -NewName ${{github.workspace}}\SiriKaliQt6-$version.setup.exe
     -
       name: Post Releases
       uses: ncipollo/release-action@v1
       with:
-        artifacts: ${{github.workspace}}\SiriKaliQt5-${{ env.RELEASEVERSION }}.setup.exe,${{github.workspace}}\SiriKaliQt6-${{ env.RELEASEVERSION }}.setup.exe,${{github.workspace}}\SiriKaliQt6-${{ env.RELEASEVERSION }}.exe.zip,${{github.workspace}}\SiriKaliQt5-${{ env.RELEASEVERSION }}.exe.zip
+        artifacts: ${{github.workspace}}\SiriKaliQt5-${{ env.BUILD_VERSION }}.Trim().setup.exe,${{github.workspace}}\SiriKaliQt6-${{ env.BUILD_VERSION }}.Trim().setup.exe,${{github.workspace}}\SiriKaliQt6-${{ env.BUILD_VERSION }}.Trim().exe.zip,${{github.workspace}}\SiriKaliQt5-${{ env.BUILD_VERSION }}.Trim().exe.zip
         tag: "0.0.0"
         commit: "main"
         allowUpdates: true
