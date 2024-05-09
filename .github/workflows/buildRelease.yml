@@ -2,9 +2,7 @@ name: buildRelease
 
 on:
   push:
-    branches:
-    - main
-    tags-ignore:
+    tags:
     - '*'
 
 env:
