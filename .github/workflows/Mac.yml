@@ -40,4 +40,7 @@ jobs:
       run: cmake -DBUILD_WITH_QT6=true -DOUTPUT_BASE_NAME=MediaDownloaderQt6 -DLIBRARIES_LOCATION=${{github.workspace}}/MediaDownloader.git/ -DOUTPUT_PATH=${{github.workspace}}/ -DSOURCE_PATH=${{github.workspace}}/MAC/ -DCMAKE_VERBOSE_MAKEFILE=FALSE -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -S ${{github.workspace}}/MAC/ -B ${{github.workspace}}/MAC/build6
     - 
       name: Build
-      run: cmake --build ${{github.workspace}}/MAC/build6
+      run: |
+          cmake --build ${{github.workspace}}/MAC/build6
+          ls ${{github.workspace}}/MAC/build6
+          ${{github.workspace}}/MAC
