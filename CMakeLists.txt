@@ -6,8 +6,9 @@ endif()
 
 project(media-downloader LANGUAGES CXX)
 
-if(APPLE)
+if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     message("Building for apple")
+    set(APPLE TRUE)
 endif()
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
