@@ -49,6 +49,12 @@ jobs:
       run: |
              cd ${{github.workspace}}/media-downloader
              ${{github.workspace}}/qt6/Qt/${{ env.QT6_VERSION }}/macos/bin/macdeployqt6 media-downloader.app -verbose=0
+             echo "------${{github.workspace}}/media-downloader---------"
+             ls ${{github.workspace}}/media-downloader
+             echo "-------------------"
+             echo "------${{github.workspace}}---------"
+             ls ${{github.workspace}}
+             echo "-------------------"
     -  
       name: Post Bundle
       uses: ncipollo/release-action@v1
