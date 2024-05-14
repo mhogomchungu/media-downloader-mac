@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2017
+ *  Copyright (c) 2021
  *  name : Francis Banyikwa
  *  email: mhogomchungu@gmail.com
  *  This program is free software: you can redistribute it and/or modify
@@ -17,906 +17,945 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <QSettings>
-#include <QApplication>
-#include <QWidget>
-#include <QDialog>
-
-#include "engines.h"
 #include "settings.h"
 #include "utility.h"
-#include "readonlywarning.h"
 #include "locale_path.h"
-#include "win.h"
+#include "translator.h"
+#include "logger.h"
+#include "themes.h"
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <iostream>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <string.h>
-#include <stdio.h>
-#include <cstdio>
-#include <memory>
-#include <iostream>
+#include <QDir>
+#include <QFile>
 
-#include <QByteArray>
-#include <QTranslator>
+#include <cstring>
+#include <algorithm>
 
-#include <QCoreApplication>
-#include <QStandardPaths>
+#include <QDesktopServices>
 
 static QString _configPath()
 {
 #if QT_VERSION >= QT_VERSION_CHECK( 5,6,0 )
-
-	auto s = QStandardPaths::standardLocations( QStandardPaths::ConfigLocation ) ;
+	auto s = QStandardPaths::standardLocations( QStandardPaths::AppDataLocation ) ;
 
 	if( s.isEmpty() ){
 
-		return QDir::homePath() + "/.config/SiriKali/" ;
+		return QDir::homePath() + "/.config/media-downloader/" ;
+	}else{
+		return s.first() + "/media-downloader/" ;
+	}
+#else
+	return QDir::homePath() + "/.config/media-downloader/" ;
+#endif
+}
+
+static QString _downloadLocation()
+{
+#if QT_VERSION >= QT_VERSION_CHECK( 5,6,0 )
+	auto s = QStandardPaths::standardLocations( QStandardPaths::DownloadLocation ) ;
+
+	if( s.isEmpty() ){
+
+		return QDir::homePath() + "/Downloads" ;
 	}else{
 		return s.first() ;
 	}
 #else
-	return QDir::homePath() + "/.config/SiriKali/" ;
+	return QDir::homePath() + "/Downloads" ;
 #endif
 }
 
-static std::unique_ptr< QSettings > _set_config( const QString& path,bool createFolders )
+static QString _monitorClipboadUrl( settings::tabName e )
 {
-	if( createFolders ){
+	if( e == settings::tabName::basic ){
 
-		QDir d ;
-		d.mkpath( path + "/settings" ) ;
-		d.mkpath( path + "/bin" ) ;
+		return "BasicDownloaderMonitorClipboadUrl" ;
+
+	}else if( e == settings::tabName::batch ){
+
+		return "BatchDownloaderMonitorClipboadUrl" ;
+
+	}else if( e == settings::tabName::playlist ){
+
+		return "PlaylistDownloaderMonitorClipboadUrl" ;
+	}else{
+		return "" ;
 	}
+}
+
+void settings::setMonitorClipboardUrl( bool e,settings::tabName t )
+{
+	m_settings.setValue( _monitorClipboadUrl( t ),e ) ;
+}
+
+bool settings::monitorClipboardUrl( settings::tabName tabName )
+{
+	auto m = _monitorClipboadUrl( tabName ) ;
+
+	return this->getOption( m,false ) ;
+}
+
+QString settings::themeName()
+{
+	return this->getOption( "ThemeName",themes().unTranslatedAt( 0 ) ) ;
+}
+
+void settings::setThemeName( const QString& e )
+{
+	m_settings.setValue( "ThemeName",e ) ;
+}
+
+static QString _getOptionsHistoryTabName( settings::tabName e )
+{
+	if( e == settings::tabName::basic ){
+
+		return "BasicDownloaderOptionsHistory" ;
+
+	}else if( e == settings::tabName::batch ){
+
+		return "BatchDownloaderOptionsHistory" ;
+
+	}else if( e == settings::tabName::playlist ){
+
+		return "PlaylistDownloaderOptionsHistory" ;
+	}else{
+		return "" ;
+	}
+}
+
+QStringList settings::getOptionsHistory( settings::tabName e )
+{
+	auto m = _getOptionsHistoryTabName( e ) ;
+
+	return this->getOption( m,QStringList() ) ;
+}
+
+void settings::clearOptionsHistory( settings::tabName e )
+{
+	m_settings.setValue( _getOptionsHistoryTabName( e ),QStringList() ) ;
+}
+
+static void _addToHistory( QSettings& settings,
+			   QStringList& history,
+			   const QString& key,
+			   const QString& input,
+			   int max )
+{
+	if( !input.isEmpty() && !history.contains( input ) ){
+
+		if( history.size() == max ){
+
+			history.removeLast() ;
+		}
+
+		history.insert( 0,input ) ;
+
+		settings.setValue( key,history ) ;
+	}
+}
+
+void settings::addToplaylistRangeHistory( const QString& e )
+{
+	if( this->saveHistory() ){
+
+		auto a = this->playlistRangeHistory() ;
+		auto b = "PlaylistRangeHistory" ;
+
+		_addToHistory( m_settings,a,b,e,this->historySize() ) ;
+	}
+}
+
+void settings::addOptionsHistory( const QString& e,settings::tabName s )
+{
+	if( this->saveHistory() ){
+
+		auto a = this->getOptionsHistory( s ) ;
+		auto b = _getOptionsHistoryTabName( s ) ;
+
+		_addToHistory( m_settings,a,b,e,this->historySize() ) ;
+	}
+}
+
+void settings::clearPlaylistRangeHistory()
+{
+	QStringList s{ "--break-on-existing" } ;
+
+	m_settings.setValue( "PlaylistRangeHistory",s ) ;
+}
+
+void settings::clearPlaylistUrlHistory()
+{
+	m_settings.setValue( "PlaylistUrlHistory",QStringList() ) ;
+}
+
+void settings::setAutoSavePlaylistOnExit( bool e )
+{
+	m_settings.setValue( "AutoSavePlaylistOnExit",e ) ;
+}
+
+bool settings::autoSavePlaylistOnExit()
+{
+	return this->getOption( "AutoSavePlaylistOnExit",true ) ;
+}
+
+bool settings::useInternalArchiveFile()
+{
+	return this->getOption( "UseInternalArchiveFile",true ) ;
+}
+
+bool settings::enableLibraryTab()
+{
+	return this->getOption( "EnableLibraryTab",false ) ;
+}
+
+bool settings::checkForEnginesUpdates()
+{
+	return this->getOption( "CheckForEnginesUpdates",true ) ;
+}
+
+bool settings::autoHideDownloadWhenCompleted()
+{
+	return this->getOption( "AutoHideDownloadWhenCompleted",false ) ;
+}
+
+bool settings::deleteFilesOnCanceledDownload()
+{
+	return this->getOption( "DeleteFilesOnCanceledDownload",false ) ;
+}
+
+bool settings::autoSetDefaultEngineAndOptions()
+{
+	return this->getOption( "AutoSetDefaultEngineAndOptions",false ) ;
+}
+
+qint64 settings::timeOutWaitingForClipboardData()
+{
+	return this->getOption( "TimeOutWaitingForClipboardData",30000 ) ;
+}
+
+void settings::setAutoHideDownloadWhenCompleted( bool e )
+{
+	m_settings.setValue( "AutoHideDownloadWhenCompleted",e ) ;
+}
+
+Qt::Alignment settings::textAlignment()
+{
+	auto m = this->getOption( "MainTableTextAlignment",QString( "center" ) ) ;
+
+	if( m == "center" ){
+
+		return Qt::AlignCenter ;
+
+	}else if( m == "left" ){
+
+		return Qt::AlignLeft | Qt::AlignVCenter ;
+
+	}else if( m == "right" ){
+
+		return Qt::AlignRight | Qt::AlignVCenter;
+	}else{
+		m_settings.setValue( "MainTableTextAlignment","center" ) ;
+		return Qt::AlignCenter ;
+	}
+}
+
+void settings::setEnableLibraryTab( bool e )
+{
+	m_settings.setValue( "EnableLibraryTab",e ) ;
+}
+
+void settings::setCheckForUpdates( bool e )
+{
+	m_settings.setValue( "CheckForUpdates",e ) ;
+}
+
+void settings::setUseInternalArchiveFile( bool e )
+{
+	m_settings.setValue( "UseInternalArchiveFile",e ) ;
+}
+
+int settings::networkTimeOut()
+{
+	return this->getOption( "NetworkTimeOutInSeconds",30 )  * 1000 ;
+}
+
+QStringList settings::playlistRangeHistory()
+{
+	QStringList s{ "--break-on-existing" } ;
+
+	return this->getOption( "PlaylistRangeHistory",s ) ;
+}
+
+QStringList settings::playlistUrlHistory()
+{
+	return this->getOption( "PlaylistUrlHistory",QStringList() ) ;
+}
+
+void settings::setPlaylistRangeHistoryLastUsed( const QString& e )
+{
+	m_settings.setValue( "playlistRangeHistoryLastUsed",e ) ;
+}
+
+QString settings::playlistRangeHistoryLastUsed()
+{
+	QString s( "--break-on-existing" ) ;
+
+	return this->getOption( "playlistRangeHistoryLastUsed",s ) ;
+}
+
+QString settings::gitHubDownloadUrl()
+{
+	QString channel = [](){
+
+		if( utility::runningGitVersion() ){
+
+			return "git" ;
+		}else{
+			return "release" ;
+		}
+	}() ;
+
+	auto m = this->getOption( "WindowsUpdateChannel",channel ) ;
+
+	if( m.compare( "release",Qt::CaseInsensitive ) == 0 ){
+
+		return "https://api.github.com/repos/mhogomchungu/media-downloader/releases/latest" ;
+	}else{
+		return "https://api.github.com/repos/mhogomchungu/media-downloader-git/releases/latest" ;
+	}
+}
+
+static std::unique_ptr< QSettings > _set_config( const QString& path )
+{
+	QDir().mkpath( path + "/settings" ) ;
 
 	auto m = path + "/settings/settings.ini" ;
 
 	return std::make_unique< QSettings >( m,QSettings::IniFormat ) ;
 }
 
-std::unique_ptr< QSettings > lxqt_qsettings( const QString& path )
-{
-	auto m = path + "/lxqt_settings.ini" ;
-
-	return std::make_unique< QSettings >( m,QSettings::IniFormat ) ;
-}
-
-std::unique_ptr< QSettings > lxqt_qsettings()
-{
-	if( settings::portableVersion() ){
-
-		return lxqt_qsettings( settings::portableVersionConfigPath() + "/settings" ) ;
-	}else{
-		return lxqt_qsettings( _configPath() + "/settings" ) ;
-	}
-}
-
-static std::unique_ptr< QSettings > _init()
-{
-	if( settings::portableVersion() ){
-
-		return _set_config( settings::portableVersionConfigPath(),true ) ;
-	}else{
-		if( utility::platformIsWindows() ){
-
-			auto appPath      = _configPath() + "/SiriKali" ;
-			auto settingsPath = appPath + "/settings" ;
-
-			if( QFile::exists( settingsPath ) ){
-
-				return _set_config( appPath,false ) ;
-			}else{
-				/*
-				 * Migrating from registry based config to text file config.
-				 */
-
-				auto newSettings = _set_config( appPath,true ) ;
-
-				auto lxqtSettings = lxqt_qsettings( settingsPath ) ;
-
-				QSettings oldSettings( "SiriKali","SiriKali" ) ;
-
-				const auto keys = oldSettings.allKeys() ;
-
-				for( const auto& it : keys ){
-
-					if( it == "WindowsPbkdf2Interations" || it == "LXQtWindowsDPAPI_Data" ){
-
-						lxqtSettings->setValue( it,oldSettings.value( it ) ) ;
-					}else{
-						newSettings->setValue( it,oldSettings.value( it ) ) ;
-					}
-				}
-
-				//oldSettings.clear() ;
-
-				return newSettings ;
-			}
-		}else{
-			return std::make_unique< QSettings >( "SiriKali","SiriKali" ) ;
-		}
-	}
-}
-
-settings::settings() :
-	m_settingsP( _init() ),
-	m_settings( *m_settingsP ),
-	m_portableVersion( settings::portableVersion() )
-{
-}
-
-bool settings::portableVersion()
-{
-	if( utility::platformIsWindows() ){
-
-		auto a = QFile::exists( settings::portableVersionConfigPath() ) ;
-		auto b = QFile::exists( QDir::currentPath() + "/sirikali.exe" ) ;
-
-		return a && b ;
-	}else{
-		return false ;
-	}
-}
-
-QString settings::portableVersionConfigPath()
-{
-	return QDir::currentPath() + "/local" ;
-}
-
-bool settings::showCipherFolderAndMountPathInFavoritesList()
-{
-	if( !m_settings.contains( "ShowCipherFolderAndMountPathInFavoritesList" ) ){
-
-		m_settings.setValue( "ShowCipherFolderAndMountPathInFavoritesList",false ) ;
-	}
-
-	return m_settings.value( "ShowCipherFolderAndMountPathInFavoritesList" ).toBool() ;
-}
-
-QString settings::homePath()
-{
-	if( utility::platformIsWindows() ){
-
-		return QDir::homePath() + "/Desktop" ;
-	}else{
-		return QDir::homePath() ;
-	}
-}
-
-QString settings::windowsMountPointPath()
-{
-	if( !m_settings.contains( "WindowsMountPointPath" ) ){
-
-		auto m = settings::homePath() ;
-
-		while( m.endsWith( "/" ) ){
-
-			m.truncate( m.size() - 1 ) ;
-		}
-
-		m_settings.setValue( "WindowsMountPointPath",m + "/.SiriKali" ) ;
-	}
-
-	auto m = m_settings.value( "WindowsMountPointPath" ).toString() ;
-
-	while( m.endsWith( "/" ) ){
-
-		m.truncate( m.size() - 1 ) ;
-	}
-
-	return m + "/" ;
-}
-
-bool settings::windowsUseMountPointPath( const engines::engine& e )
-{
-	if( e.supportsMountPathsOnWindows() ){
-
-		if( !m_settings.contains( "WindowsUseMountPointPath" ) ){
-
-			m_settings.setValue( "WindowsUseMountPointPath",false ) ;
-		}
-
-		return m_settings.value( "WindowsUseMountPointPath" ).toBool() ;
-	}else{
-		return false ;
-	}
-}
-
-int settings::pollForUpdatesInterval()
-{
-	if( !m_settings.contains( "WinFSPpollingInterval" ) ){
-
-		m_settings.setValue( "WinFSPpollingInterval",2 ) ;
-	}
-
-	return m_settings.value( "WinFSPpollingInterval" ).toInt() ;
-}
-
-int settings::sshfsBackendTimeout()
-{
-	if( !m_settings.contains( "sshfsBackendTimeout" ) ){
-
-		m_settings.setValue( "sshfsBackendTimeout",30 ) ;
-	}
-
-	return m_settings.value( "sshfsBackendTimeout" ).toInt() ;
-}
-
-int settings::favoritesEntrySize()
-{
-	auto s = m_settings.value( "FavoritesVolumes" ).toStringList() ;
-
-	if( s.size() == 0 ){
-
-		return 0 ;
-	}else{
-		return utility::split( s.first(),'\t' ).size() ;
-	}
-}
-
-static QString _homePaths( const QString& homePath,bool portableVersion )
-{
-	if( portableVersion ){
-
-		return settings::portableVersionConfigPath() + "/bin;" + homePath ;
-	}else{
-		return homePath ;
-	}
-}
-
-void settings::setWindowsExecutableSearchPath( const QString& e )
-{
-	if( e.isEmpty() ){
-
-		auto m = _homePaths( settings::homePath(),m_portableVersion ) ;
-		m_settings.setValue( "WindowsExecutableSearchPath",m ) ;
-	}else{
-		auto m = _homePaths( e,m_portableVersion ) ;
-		m_settings.setValue( "WindowsExecutableSearchPath",m ) ;
-	}
-}
-
-QString settings::windowsExecutableSearchPath()
-{
-	if( !m_settings.contains( "WindowsExecutableSearchPath" ) ){
-
-		auto m = _homePaths( settings::homePath(),m_portableVersion ) ;
-		m_settings.setValue( "WindowsExecutableSearchPath",m ) ;
-	}
-
-	if( m_portableVersion ){
-
-		auto s = utility::split( m_settings.value( "WindowsExecutableSearchPath" ).toString(),";" ) ;
-
-		if( s.size() > 1 ){
-
-			this->setWindowsExecutableSearchPath( s.at( 1 ) ) ;
-		}
-	}
-
-	return m_settings.value( "WindowsExecutableSearchPath" ).toString() ;
-}
-
-QString settings::executableSearchPath()
-{
-	if( !m_settings.contains( "ExecutableSearchPath" ) ){
-
-		m_settings.setValue( "ExecutableSearchPath",this->defaultExecutableSearchPath() ) ;
-	}
-
-	return m_settings.value( "ExecutableSearchPath" ).toString() ;
-}
-
-QString settings::defaultExecutableSearchPath()
-{
-	if( utility::platformIsOSX() ){
-
-		return "/opt/homebrew/bin" ;
-	}else{
-		return QDir::homePath() + "/.bin" ;
-	}
-}
-
-void settings::setExecutableSearchPath( const QString& e )
-{
-	m_settings.setValue( "ExecutableSearchPath",e ) ;
-}
-
-int settings::windowsPbkdf2Interations()
-{
-	if( !m_settings.contains( "WindowsPbkdf2Interations" ) ){
-
-		m_settings.setValue( "WindowsPbkdf2Interations",50000 ) ;
-	}
-
-	return m_settings.value( "WindowsPbkdf2Interations" ).toInt() ;
-}
-
-int windowsPbkdf2Interations()
-{
-	return settings::instance().windowsPbkdf2Interations() ;
-}
-
-QByteArray windowsKeysStorageData()
-{
-	return settings::instance().windowsKeysStorageData() ;
-}
-
-void windowsKeysStorageData( const QByteArray& e )
-{
-	settings::instance().windowsKeysStorageData( e ) ;
-}
-
-QByteArray settings::windowsKeysStorageData()
-{
-	if( !m_settings.contains( "LXQtWindowsDPAPI_Data" ) ){
-
-		m_settings.setValue( "LXQtWindowsDPAPI_Data",QByteArray() ) ;
-	}
-
-	return m_settings.value( "LXQtWindowsDPAPI_Data" ).toByteArray() ;
-}
-
-void settings::windowsKeysStorageData( const QByteArray& e )
-{
-	m_settings.setValue( "LXQtWindowsDPAPI_Data",e ) ;
-}
-
-QString settings::externalPluginExecutable()
-{
-	if( m_settings.contains( "ExternalPluginExecutable" ) ){
-
-		return m_settings.value( "ExternalPluginExecutable" ).toString() ;
-	}else{
-		settings::setExternalPluginExecutable( QString() ) ;
-
-		return m_settings.value( "ExternalPluginExecutable" ).toString() ;
-	}
-}
-
-void settings::setExternalPluginExecutable( const QString& e )
-{
-	if( e.isEmpty() ){
-
-		QString s = "gpg --no-tty --yes --no-mdc-warning --no-verbose --passphrase-fd 0 -d" ;
-		m_settings.setValue( "ExternalPluginExecutable",s ) ;
-	}else{
-		m_settings.setValue( "ExternalPluginExecutable",e ) ;
-	}
-}
-
-bool settings::enableRevealingPasswords()
-{
-	if( m_settings.contains( "EnableRevealingPasswords" ) ){
-
-		return m_settings.value( "EnableRevealingPasswords" ).toBool() ;
-	}else{
-		bool e = true ;
-
-		m_settings.setValue( "EnableRevealingPasswords",e ) ;
-
-		return e ;
-	}
-}
-
-bool settings::enableHighDpiScaling()
-{
-	if( !m_settings.contains( "EnableHighDpiScalingV1" ) ){
-
-		m_settings.setValue( "EnableHighDpiScalingV1",true ) ;
-	}
-
-	return m_settings.value( "EnableHighDpiScalingV1" ).toBool() ;
-}
-
-void settings::enableHighDpiScaling( bool e )
-{
-	m_settings.setValue( "EnableHighDpiScalingV1",e ) ;
-}
-
-void settings::showDebugWindowOnStartup( bool e )
-{
-	m_settings.setValue( "showDebugWindowOnStartup",e ) ;
-}
-
-bool settings::showDebugWindowOnStartup()
-{
-	if( !m_settings.contains( "showDebugWindowOnStartup" ) ){
-
-		m_settings.setValue( "showDebugWindowOnStartup",false ) ;
-	}
-
-	return m_settings.value( "showDebugWindowOnStartup" ).toBool() ;
-}
-
-QByteArray settings::enabledHighDpiScalingFactor()
-{
-	if( !m_settings.contains( "EnabledHighDpiScalingFactor" ) ){
-
-		m_settings.setValue( "EnabledHighDpiScalingFactor","1.0" ) ;
-	}
-
-	return m_settings.value( "EnabledHighDpiScalingFactor" ).toByteArray() ;
-}
-
-void settings::enabledHighDpiScalingFactor( const QString& e )
-{
-	m_settings.setValue( "EnabledHighDpiScalingFactor",e ) ;
-}
-
-void settings::clearFavorites()
-{
-	m_settings.setValue( "FavoritesVolumes",QStringList() ) ;
-}
-
-static QString _file_manager()
-{
-	QString s ;
-	QString e ;
-
-	if( utility::platformIsLinux() ){
-
-		struct{
-			const char * name ;
-			const char * exe_name ;
-
-		}fm[] = { { "KDE","dolphin" },
-			  { "GNOME","nautilus" },
-			  { nullptr,nullptr } } ;
-
-		s = "xdg-open" ;
-		e = engines::executableFullPath( s ) ;
-
-		auto DE = QProcessEnvironment::systemEnvironment().value( "XDG_CURRENT_DESKTOP" ) ;
-
-		for( size_t i = 0 ; fm[ i ].name != nullptr ; i++ ){
-
-			const auto& it = fm[ i ] ;
-
-			if( DE.contains( it.name,Qt::CaseInsensitive ) ){
-
-				auto m = engines::executableFullPath( it.exe_name ) ;
-
-				if( QFile::exists( m ) ){
-
-					return m ;
-				}
-
-				break ;
-			}
-		}
-
-	}else if( utility::platformIsOSX() ){
-
-		s = "open" ;
-		e = engines::executableFullPath( s ) ;
-	}else{
-		s = "explorer.exe" ;
-	}
-
-	if( e.isEmpty() ){
-
-		return s ;
-	}else{
-		return e ;
-	}
-}
-
-void settings::setParent( QWidget * parent,QWidget ** localParent,QDialog * dialog )
-{
-	auto _default_parent = [ this ](){
-
-		if( m_settings.contains( "UseDefaultWidgetRelationship" ) ){
-
-			return m_settings.value( "UseDefaultWidgetRelationship" ).toBool() ;
-		}else{
-			bool e = true ;
-			m_settings.setValue( "UseDefaultWidgetRelationship",e ) ;
-			return e ;
-		}
-	}() ;
-
-	if( _default_parent ){
-
-		*localParent = dialog ;
-	}else{
-		*localParent = parent ;
-	}
-}
-
-void settings::scaleGUI()
-{
-#if QT_VERSION >= 0x050600
-
-	if( this->enableHighDpiScaling() ){
-
-		QApplication::setAttribute( Qt::AA_EnableHighDpiScaling ) ;
-	}
-
-	auto a = this->enabledHighDpiScalingFactor() ;
-
-	if( a != "1.0" ){
-
-		qputenv( "QT_SCALE_FACTOR",a ) ;
-	}
-
-#endif
-}
-
-QString settings::fileManager()
-{
-	if( m_settings.contains( "FileManagerOpener" ) ){
-
-		auto e = m_settings.value( "FileManagerOpener" ).toString() ;
-
-		if( e.isEmpty() ){
-
-			this->setFileManager( QString() ) ;
-
-			return m_settings.value( "FileManagerOpener" ).toString() ;
-		}else{
-			return e ;
-		}
-	}else{
-		this->setFileManager( QString() ) ;
-		return m_settings.value( "FileManagerOpener" ).toString() ;
-	}
-}
-
-QStringList settings::openWith()
-{
-	if( !m_settings.contains( "FolderOpenWith" ) ){
-
-		m_settings.setValue( "FolderOpenWith",QString() ) ;
-	}
-
-	auto m = m_settings.value( "FolderOpenWith" ).toString() ;
-
-	return utility::splitPreserveQuotes( m ) ;
-}
-
-static void _set_mount_default( settings& s )
-{
-	QSettings& m = s.backend() ;
-
-	if( m.contains( "MountPrefix" ) ){
-
-		if( !m.value( "MountPrefix" ).toString().isEmpty() ){
-
-			return ;
-		}
-	}
-
-	if( utility::platformIsWindows() ){
-
-		m.setValue( "MountPrefix",s.homePath() + "/Desktop" ) ;
-	}else{
-		m.setValue( "MountPrefix",s.homePath() + "/.SiriKali" ) ;
-	}
-}
-
-QString settings::mountPath()
-{
-	_set_mount_default( *this ) ;
-
-	auto e = m_settings.value( "MountPrefix" ).toString() ;
-
-	while( true ){
-
-		if( e == "/" ){
-
-			break ;
-
-		}else if( e.endsWith( '/' ) ){
-
-			e.truncate( e.length() - 1 ) ;
-		}else{
-			break ;
-		}
-	}
-
-	return e ;
-}
-
-QString settings::mountPath( const QString& path )
-{
-	_set_mount_default( *this ) ;
-
-	return m_settings.value( "MountPrefix" ).toString() + "/" + path ;
-}
-
-QString settings::ConfigLocation()
-{
-	if( m_portableVersion ){
-
-		return QDir().currentPath() + "/local" ;
-	}
-
-	if( !m_settings.contains( "AppDataLocation" ) ){
-
-		auto New = QStandardPaths::standardLocations( QStandardPaths::AppDataLocation ) ;
-		auto old = QStandardPaths::standardLocations( QStandardPaths::ConfigLocation ) ;
-
-		QString newPath ;
-		QString oldPath ;
-
-		if( New.isEmpty() ){
-
-			//Should not get here according to Qt documentation
-			newPath = QDir::homePath() + "/.config/SiriKali/" ;
-		}else{
-			newPath = New.first() ;
-		}
-
-		if( old.isEmpty() ){
-
-			//Should not get here according to Qt documentation
-			oldPath = QDir::homePath() + "/.config/SiriKali/" ;
-		}else{
-			oldPath = old.first() + "/SiriKali/" ;
-		}
-
-		utility::moveFolder( oldPath,newPath,[]( bool folder,const QString& e ){
-
-			if( folder ){
-
-				return true ;
-			}else{
-				return e != "SiriKali.conf" ;
-			}
-		} ) ;
-
-		m_settings.setValue( "AppDataLocation",newPath ) ;
-	}
-
-	return m_settings.value( "AppDataLocation" ).toString() ;
-}
-
-QString settings::environmentalVariableVolumeKey()
-{
-	if( !m_settings.contains( "EnvironmentalVariableVolumeKey" ) ){
-
-		m_settings.setValue( "EnvironmentalVariableVolumeKey","SiriKaliVolumeKey" ) ;
-	}
-
-	return m_settings.value( "EnvironmentalVariableVolumeKey" ).toString() ;
-}
-
-void settings::removeKey( const QString& key )
-{
-	m_settings.remove( key ) ;
-}
-
-QString settings::walletName()
-{
-	return "SiriKali" ;
-}
-
-QString settings::applicationName()
-{
-	return "SiriKali" ;
-}
-
-int settings::readPasswordMaximumLength()
-{
-	if( !m_settings.contains( "ReadPasswordMaximumLength" ) ){
-
-		m_settings.setValue( "ReadPasswordMaximumLength",1024 ) ;
-	}
-
-	return m_settings.value( "ReadPasswordMaximumLength" ).toInt() ;
-}
-
-bool settings::unMountVolumesOnLogout()
-{
-	if( !m_settings.contains( "UnMountVolumesOnLogout" ) ){
-
-		m_settings.setValue( "UnMountVolumesOnLogout",false ) ;
-	}
-
-	return m_settings.value( "UnMountVolumesOnLogout" ).toBool() ;
-}
-
-QStringList settings::mountMonitorFolderPaths()
-{
-	if( !m_settings.contains( "MountMonitorFolderPaths" ) ){
-
-		m_settings.setValue( "MountMonitorFolderPaths",QStringList() ) ;
-	}
-
-	return m_settings.value( "MountMonitorFolderPaths" ).toStringList() ;
-}
-
-QStringList settings::supportedFileSystemsOnMountPaths()
-{
-	if( !m_settings.contains( "SupportedFileSystemsOnMountPaths" ) ){
-
-		m_settings.setValue( "SupportedFileSystemsOnMountPaths",QStringList( { "NTFS" } ) ) ;
-	}
-
-	return m_settings.value( "SupportedFileSystemsOnMountPaths" ).toStringList() ;
-}
-
-QString settings::gvfsFuseMonitorPath()
-{
-	if( !m_settings.contains( "GvfsFuseMonitorPath" ) ){
-
-		m_settings.setValue( "GvfsFuseMonitorPath",QString() ) ;
-	}
-
-	return m_settings.value( "GvfsFuseMonitorPath" ).toString() ;
-}
-
-int settings::mountMonitorFolderPollingInterval()
-{
-	if( !m_settings.contains( "MountMonitorFolderPollingInterval" ) ){
-
-		m_settings.setValue( "MountMonitorFolderPollingInterval",0 ) ;
-	}
-
-	return m_settings.value( "MountMonitorFolderPollingInterval" ).toInt() ;
-}
-
-int settings::delayBeforeAutoMountAtStartup()
-{
-	if( !m_settings.contains( "DelayBeforeAutoMountAtStartup" ) ){
-
-		m_settings.setValue( "DelayBeforeAutoMountAtStartup",1 ) ;
-	}
-
-	return m_settings.value( "DelayBeforeAutoMountAtStartup" ).toInt() ;
-}
-
-bool settings::readFavorites( QMenu * m )
-{
-	m->clear() ;
-
-	auto _enable_entry = []( const QString& e ){
-
-		if( e.startsWith( "sshfs ",Qt::CaseInsensitive ) ){
-
-			return true ;
-		}else{
-			return QFile::exists( e ) ;
-		}
-	} ;
-
-	auto _add_action = [ m ]( const QString& e,const QString& s,bool enable = true ){
-
-		auto ac = new QAction( m ) ;
-
-		ac->setText( e ) ;
-		ac->setObjectName( s ) ;
-		ac->setEnabled( enable ) ;
-
-		return ac ;
-	} ;
-
-	m->addAction( _add_action( QObject::tr( "Manage Favorites" ),"Manage Favorites" ) ) ;
-	m->addAction( _add_action( QObject::tr( "Mount All" ),"Mount All" ) ) ;
-
-	m->addSeparator() ;
-
-	const auto& favorites = favorites::instance().readFavorites() ;
-
-	bool cipherPathRepeatsInFavoritesList = false ;
-
-	for( auto it = favorites.begin() ; it != favorites.end() ; it++ ){
-
-		for( auto xt = it + 1 ; xt != favorites.end() ; xt++ ){
-
-			if( ( *it ).volumePath == ( *xt ).volumePath ){
-
-				cipherPathRepeatsInFavoritesList = true ;
-				break ;
-			}
-		}
-	}
-
-	auto _showCipherPathAndMountPath = [ & ](){
-
-		if( cipherPathRepeatsInFavoritesList ){
-
-			return true ;
-		}else{
-			return this->showCipherFolderAndMountPathInFavoritesList() ;
-		}
-	}() ;
-
-	if( _showCipherPathAndMountPath ){
-
-		for( const auto& it : favorites ){
-
-			const auto& e = it.volumePath + "\n" + it.mountPointPath ;
-
-			m->addAction( _add_action( e,e,_enable_entry( it.volumePath ) ) ) ;
-			m->addSeparator() ;
-		}
-	}else{
-		for( const auto& it : favorites ){
-
-			const auto& e = it.volumePath ;
-
-			m->addAction( _add_action( e,e,_enable_entry( it.volumePath ) ) ) ;
-		}
-	}
-
-	return _showCipherPathAndMountPath ;
-}
-
-void settings::setDefaultMountPointPrefix( const QString& path )
-{
-	m_settings.setValue( "MountPrefix",path ) ;
-}
-
-template< typename T >
-static void _selectOption( QMenu * m,const T& opt )
-{
-	for( const auto& it : m->actions() ){
-
-		it->setChecked( it->objectName() == opt ) ;
-	}
-}
-
-void settings::setLocalizationLanguage( bool translate,
-					QMenu * m,
-					settings::translator& translator )
-{
-	auto r = settings::instance().localizationLanguage().toLatin1() ;
-
-	if( translate ){
-
-		translator.setLanguage( r ) ;
-	}else{
-		const auto e = utility::directoryList( settings::instance().localizationLanguagePath() ) ;
-
-		for( const auto& it : e ){
-
-			if( !it.startsWith( "qt_" ) && it.endsWith( ".qm" ) ){
-
-				auto name = it ;
-				name.remove( ".qm" ) ;
-
-				auto uiName = translator.UIName( name ) ;
-
-				if( !uiName.isEmpty() ){
-
-					auto ac = m->addAction( uiName ) ;
-
-					ac->setCheckable( true ) ;
-					ac->setObjectName( name ) ;
-					ac->setText( translator.translate( name ) ) ;
-				}
-			}
-		}
-
-		_selectOption( m,r ) ;
-	}
-}
-
-void settings::languageMenu( QMenu * m,QAction * ac,settings::translator& s )
-{
-	auto e = ac->objectName() ;
-
-	this->setLocalizationLanguage( e ) ;
-
-	this->setLocalizationLanguage( true,m,s ) ;
-
-	_selectOption( m,e ) ;
-}
-
-QString settings::localizationLanguagePath()
+static std::unique_ptr< QSettings > _init( const QString& dataPath,bool portableVersion )
 {	
 	if( utility::platformIsWindows() ){
 
-		return QDir().currentPath() + "/translations" ;
+		if( portableVersion ){
+
+			return _set_config( dataPath ) ;
+		}else{
+			return _set_config( _configPath() ) ;
+		}
+	}else{
+		auto path = _configPath() ;
+
+		if( QFile::exists( path + "/settings/settings.ini" ) ){
+
+			return _set_config( path ) ;
+		}else{
+			/*
+			 * Migrating to .ini config file
+			 */
+			QSettings oldSettings( "media-downloader","media-downloader" ) ;
+
+			auto newSettings = _set_config( path ) ;
+
+			const auto keys = oldSettings.allKeys() ;
+
+			for( const auto& it : keys ){
+
+				newSettings->setValue( it,oldSettings.value( it ) ) ;
+			}
+
+			oldSettings.clear() ;
+
+			return newSettings ;
+		}
+	}
+}
+
+settings::settings( const utility::cliArguments& args ) :
+	m_options( args ),
+	m_settingsP( _init( m_options.dataPath(),m_options.portableVersion() ) ),
+	m_settings( *m_settingsP )
+
+{
+#if QT_VERSION >= QT_VERSION_CHECK( 5,6,0 )
+
+	m_EnableHighDpiScaling = true ;
+	#if QT_VERSION < QT_VERSION_CHECK( 6,0,0 )
+		QApplication::setAttribute( Qt::AA_EnableHighDpiScaling ) ;
+	#endif
+#else
+	m_EnableHighDpiScaling = false ;
+#endif
+	auto m = this->highDpiScalingFactor() ;
+
+	if( m != "1.0" ){
+
+		qputenv( "QT_SCALE_FACTOR",m ) ;
+	}
+}
+
+QSettings& settings::bk()
+{
+	return m_settings ;
+}
+
+void settings::setTabNumber( int s )
+{
+	m_settings.setValue( "TabNumber",s ) ;
+}
+
+int settings::tabNumber()
+{
+	return this->getOption( "TabNumber",0 ) ;
+}
+
+int settings::maxLoggerProcesses()
+{
+	return this->getOption( "MaxLoggerProcesses",0 ) ;
+}
+
+size_t settings::maxConcurrentDownloads()
+{
+	auto m = this->getOption( "MaxConcurrentDownloads",4 ) ;
+
+	return static_cast< size_t >( m ) ;
+}
+
+const QString& settings::windowsOnly3rdPartyBinPath()
+{
+	return m_options.windowsOnly3rdPartyBinPath() ;
+}
+
+const QString& settings::windowsOnlyExeBinPath()
+{
+	return m_options.m_exePath ;
+}
+
+const QString& settings::windowsOnlyDefaultPortableVersionDownloadFolder()
+{
+	return m_options.windowsOnlyDefaultPortableVersionDownloadFolder() ;
+}
+
+void settings::setMaxConcurrentDownloads( int s )
+{
+	m_settings.setValue( "MaxConcurrentDownloads",s ) ;
+}
+
+void settings::setDownloadFolder( const QString& m )
+{
+	if( m.isEmpty() ){
+
+		auto s = utility::stringConstants::mediaDownloaderDefaultDownloadPath() ;
+
+		m_settings.setValue( "DownloadFolder",s ) ;
+	}else{
+		m_settings.setValue( "DownloadFolder",m ) ;
+	}
+}
+
+static QString _downloadFolder( QSettings& settings,const QString& defaultPath,Logger * logger )
+{
+	auto mediaDownloaderCWD = utility::stringConstants::mediaDownloaderCWD() ;
+
+	auto mm = utility::stringConstants::mediaDownloaderDefaultDownloadPath() ;
+
+	if( !settings.contains( "DownloadFolder" ) ){
+
+		settings.setValue( "DownloadFolder",mm ) ;
+	}
+
+	auto m = settings.value( "DownloadFolder" ).toString() ;
+
+	if( m.startsWith( mediaDownloaderCWD ) ){
+
+		m.replace( mediaDownloaderCWD,QDir::currentPath() ) ;
+
+	}else if( m.startsWith( mm ) ){
+
+		m.replace( mm,defaultPath ) ;
+	}
+
+	if( QFile::exists( m ) ){
+
+		return m ;
+	}else{
+		if( logger ){
+
+			auto id = utility::sequentialID() ;
+
+			auto s = utility::barLine() ;
+
+			logger->add( s,id ) ;
+
+			logger->add( QObject::tr( "Resetting download folder to default" ),id ) ;
+
+			logger->add( s,id ) ;
+		}
+
+		settings.setValue( "DownloadFolder",mm ) ;
+
+		QDir().mkpath( defaultPath ) ;
+
+		return defaultPath ;
+	}
+}
+
+QString settings::downloadFolder( Logger * logger )
+{
+	if( utility::platformIsWindows() ){
+
+		if( this->portableVersion() ){
+
+			const auto& dPath = this->windowsOnlyDefaultPortableVersionDownloadFolder() ;
+
+			return _downloadFolder( m_settings,dPath,logger ) ;
+		}else{
+			return _downloadFolder( m_settings,_downloadLocation(),logger ) ;
+		}
+	}else{
+		return _downloadFolder( m_settings,_downloadLocation(),logger ) ;
+	}
+}
+
+QString settings::downloadFolder()
+{
+	return this->downloadFolder( nullptr ) ;
+}
+
+QString settings::downloadFolder( Logger& logger )
+{
+	return this->downloadFolder( &logger ) ;
+}
+
+bool settings::showTrayIcon()
+{
+	return this->getOption( "ShowTrayIcon",false ) ;
+}
+
+void settings::setshowTrayIcon( bool e )
+{
+	m_settings.setValue( "ShowTrayIcon",e ) ;
+}
+
+bool settings::autoDownload()
+{
+	return this->getOption( "AutoDownload",false ) ;
+}
+
+bool settings::downloadOptionsAsLast()
+{
+	return this->getOption( "DownloadOptionsAsLast",false ) ;
+}
+
+bool settings::autoDownloadWhenAddedInBatchDownloader()
+{
+	return this->getOption( "AutoDownloadWhenAddedInBatchDownloader",false ) ;
+}
+
+bool settings::showVersionInfoAndAutoDownloadUpdates()
+{
+	return this->getOption( "ShowVersionInfoAndAutoDownloadUpdates",true ) ;
+}
+
+bool settings::showLocalAndLatestVersionInformation()
+{
+	return this->getOption( "ShowLocalAndLatestVersionInformation",false ) ;
+}
+
+bool settings::showLocalVersionInformationOnly()
+{
+	return this->getOption( "ShowLocalVersionInformationOnly",false ) ;
+}
+
+bool settings::concurrentDownloading()
+{
+	return this->getOption( "ConcurrentDownloading",true ) ;
+}
+
+QString settings::cookieFilePath( const QString& engineName )
+{
+	auto m = "CookieFilePath_" + engineName ;
+
+	return this->getOption( m,QString() ) ;
+}
+
+void settings::setCookieFilePath( const QString& engineName,const QString& cookieFilePath )
+{
+	m_settings.setValue( "CookieFilePath_" + engineName,cookieFilePath ) ;
+}
+
+void settings::setTheme( QApplication& app,const QString& themeBasePath )
+{
+	themes( this->themeName(),themeBasePath ).set( app ) ;
+}
+
+void settings::setUseSystemProvidedVersionIfAvailable( bool e )
+{
+	m_settings.setValue( "UseSystemProvidedVersionIfAvailable",e ) ;
+}
+
+void settings::setShowMetaDataInBatchDownloader( bool e )
+{
+	m_settings.setValue( "ShowMetaDataInBatchDownloader",e ) ;
+}
+
+bool settings::showMetaDataInBatchDownloader()
+{
+	return this->getOption( "ShowMetaDataInBatchDownloader",true ) ;
+}
+
+bool settings::saveHistory()
+{
+	return this->getOption( "SaveHistory",true ) ;
+}
+
+bool settings::playlistDownloaderSaveHistory()
+{
+	return this->getOption( "PlaylistDownloaderSaveHistory",true ) ;
+}
+
+bool settings::singleInstance()
+{
+	return this->getOption( "SingleInstance",true ) ;
+}
+
+void settings::setPlaylistDownloaderSaveHistory( bool e )
+{
+	m_settings.setValue( "PlaylistDownloaderSaveHistory",e ) ;
+}
+
+int settings::stringTruncationSize()
+{
+	return this->getOption( "StringTruncationSize",100 ) ;
+}
+
+int settings::historySize()
+{
+	return this->getOption( "HistorySize",10 ) ;
+}
+
+static QString _thumbnailTabName( const QString& s, settings::tabName e )
+{
+	if( e == settings::tabName::batch ){
+
+		return s + "_batch" ;
+
+	}else if( e == settings::tabName::playlist ){
+
+		return s + "_playlist" ;
+	}else{
+		return "" ;
+	}
+}
+
+int settings::thumbnailWidth( settings::tabName s )
+{
+	auto m = _thumbnailTabName( "ThumbnailWidth",s ) ;
+
+	return this->getOption( m,128 ) ;
+}
+
+int settings::thumbnailHeight( settings::tabName s )
+{
+	auto m = _thumbnailTabName( "ThumbnailHeight",s ) ;
+
+	return this->getOption( m,72 ) ;
+}
+
+int settings::desktopNotificationTimeOut()
+{
+	return this->getOption( "DesktopNotificationTimeOut",10000 ) ;
+}
+
+void settings::setOpenWith( const QString& e )
+{
+	m_settings.setValue( "OpenWith",e ) ;
+}
+
+settings::mediaPlayer settings::openWith( Logger& logger )
+{	
+	static auto s = this->openWith() ;
+
+	return { s,logger } ;
+}
+
+std::vector< settings::mediaPlayer::PlayerOpts > settings::openWith()
+{
+	std::vector< settings::mediaPlayer::PlayerOpts > ss ;
+
+	for( auto& it : utility::getMediaPlayers() ){
+
+		ss.emplace_back( std::move( it.exePath ),std::move( it.name ) ) ;
+	}
+
+	auto mm = this->getOption( "OpenWith",QString() ) ;
+
+	if( mm.isEmpty() ){
+
+		return ss ;
+	}
+
+	auto m = util::split( mm,":" ) ;
+
+	if( m.size() < 2 ){
+
+		return ss ;
+	}
+
+	auto name = m[ 0 ] ;
+
+	using pl = settings::mediaPlayer::PlayerOpts ;
+
+	auto it = std::find_if( ss.begin(),ss.end(),[ & ]( const pl& p ){
+
+		return QString::compare( p.name,name,Qt::CaseInsensitive ) == 0 ;
+	} ) ;
+
+	if( it == ss.end() ){
+
+		if( utility::platformIsWindows() ){
+
+			auto mm = util::join( m,1,":" ) ;
+
+			if( QFile::exists( mm ) ){
+
+				ss.insert( ss.begin(),{ mm,name } ) ;
+			}
+		}else{
+			mm = QStandardPaths::findExecutable( util::join( m,1,":" ) ) ;
+
+			if( !mm.isEmpty() ){
+
+				ss.insert( ss.begin(),{ mm,name } ) ;
+			}
+		}
+	}
+
+	return ss ;
+}
+
+void settings::setShowLocalVersionInformationOnly( bool e )
+{
+	m_settings.setValue( "ShowLocalVersionInformationOnly",e ) ;
+}
+
+void settings::setShowLocalAndLatestVersionInformation( bool e )
+{
+	m_settings.setValue( "ShowLocalAndLatestVersionInformation",e ) ;
+}
+
+void settings::setShowVersionInfoAndAutoDownloadUpdates( bool e )
+{
+	m_settings.setValue( "ShowVersionInfoAndAutoDownloadUpdates",e ) ;
+}
+
+void settings::setHighDpiScalingFactor( const QString& m )
+{
+	m_settings.setValue( "EnabledHighDpiScalingFactor",m.toUtf8() ) ;
+}
+
+QString settings::textEncoding()
+{
+	return this->getOption( "YtDlpTextEncoding",QString() ) ;
+}
+
+void settings::setTextEncoding( const QString& e )
+{
+	m_settings.setValue( "YtDlpTextEncoding",e ) ;
+}
+
+void settings::setlibraryDownloadFolder( const QString& e )
+{
+	m_settings.setValue( "LibraryDownloadFolder",QDir::fromNativeSeparators( e ) ) ;
+}
+
+QString settings::libraryDownloadFolder()
+{
+	auto m = QDir::fromNativeSeparators( this->downloadFolder() ) ;
+
+	return this->getOption( "LibraryDownloadFolder",m ) ;
+}
+
+static QString _getDefaultEngineName( settings::tabName e )
+{
+	if( e == settings::tabName::basic ){
+
+		return "BasicDownloaderDefaultEngine" ;
+
+	}else if( e == settings::tabName::batch ){
+
+		return "BatchDownloaderDefaultEngine" ;
+
+	}else if( e == settings::tabName::playlist ){
+
+		return "PlaylistDownloaderDefaultEngine" ;
+	}else{
+		return "" ;
+	}
+}
+
+void settings::setDefaultEngine( const QString& e,settings::tabName n )
+{
+	m_settings.setValue( _getDefaultEngineName( n ),e ) ;
+}
+
+QString settings::defaultEngine( settings::tabName n,const QString& engineName )
+{
+	auto m = _getDefaultEngineName( n ) ;
+
+	return this->getOption( m,engineName ) ;
+}
+
+QByteArray settings::highDpiScalingFactor()
+{
+	return this->getOption( "EnabledHighDpiScalingFactor",QByteArray( "1.0" ) ) ;
+}
+
+QPixmap settings::defaultVideoThumbnailIcon( settings::tabName m )
+{
+	auto width = this->thumbnailWidth( m ) ;
+	auto height = this->thumbnailHeight( m ) ;
+
+	return QIcon( ":/video" ).pixmap( width,height ) ;
+}
+
+void settings::setDesktopNotifyOnDownloadComplete( bool e )
+{
+	m_settings.setValue( "DesktopNotifyOnDownloadComplete",e ) ;
+}
+
+void settings::setDesktopNotifyOnAllDownloadComplete( bool e )
+{
+	m_settings.setValue( "DesktopNotifyOnAllDownloadComplete",e ) ;
+}
+
+bool settings::desktopNotifyOnDownloadComplete()
+{
+	return this->getOption( "DesktopNotifyOnDownloadComplete",false ) ;
+}
+
+bool settings::desktopNotifyOnAllDownloadComplete()
+{
+	return this->getOption( "DesktopNotifyOnAllDownloadComplete",false ) ;
+}
+
+void settings::setLibraryShowFolderFirst( bool e )
+{
+	m_settings.setValue( "LibraryShowFolderFirst",e ) ;
+}
+
+void settings::setLibraryArrangeAscending( bool e )
+{
+	m_settings.setValue( "LibraryArrangeAscending",e ) ;
+}
+
+void settings::setLibraryArrangeByDate( bool e )
+{
+	m_settings.setValue( "LibraryArrangeByDate",e ) ;
+}
+
+bool settings::libraryShowFolderFirst()
+{
+	return this->getOption( "LibraryShowFolderFirst",true ) ;
+}
+
+bool settings::libraryArrangeAscending()
+{
+	return this->getOption( "LibraryArrangeAscending",true ) ;
+}
+
+bool settings::libraryArrangeByDate()
+{
+	return this->getOption( "LibraryArrangeByDate",true ) ;
+}
+
+bool settings::enabledHighDpiScaling()
+{
+	return m_EnableHighDpiScaling ;
+}
+
+static QStringList _directoryList( const QString& e )
+{
+	QDir d( e ) ;
+
+	auto s = d.entryList() ;
+
+	s.removeOne( "." ) ;
+	s.removeOne( ".." ) ;
+
+	return s ;
+}
+
+QStringList settings::localizationLanguages()
+{
+	QStringList m ;
+
+	const auto e = _directoryList( this->localizationLanguagePath() ) ;
+
+	for( const auto& it : e ){
+
+		if( !it.startsWith( "qt_" ) && it.endsWith( ".qm" ) ){
+
+			auto name = it ;
+			name.remove( ".qm" ) ;
+
+			m.append( name ) ;
+		}
+	}
+
+	return m ;
+}
+
+const QString& settings::configPaths()
+{
+	return m_options.dataPath() ;
+}
+
+QString settings::commandOnSuccessfulDownload()
+{
+	return this->getOption( "CommandOnSuccessfulDownload",QString() ) ;
+}
+
+QString settings::commandWhenAllFinished()
+{
+	return this->getOption( "CommandWhenAllFinished",QString() ) ;
+}
+
+static QString _getTabOption( const QString& s,settings::tabName e )
+{
+	if( e == settings::tabName::basic ){
+
+		return "LastUsedOptionBasicTab_" + s ;
+
+	}else if( e == settings::tabName::batch ){
+
+		return "LastUsedOptionBatchTab_" + s ;
+
+	}else if( e == settings::tabName::playlist ){
+
+		return "LastUsedOptionPlayListTab_" + s ;
+	}else{
+		return "" ;
+	}
+}
+
+QString settings::lastUsedOption( const QString& m,settings::tabName e )
+{
+	auto s = _getTabOption( m,e ) ;
+
+	return this->getOption( s,QString() ) ;
+}
+
+void settings::setLastUsedOption( const QString& m,const QString& e,settings::tabName s )
+{
+	m_settings.setValue( _getTabOption( m,s ),e ) ;
+}
+
+QString settings::localizationLanguagePath()
+{
+	if( utility::platformIsWindows() ){
+
+		return m_options.windowsOnlyExePath() + "/translations" ;
 	}
 
 	if( !m_settings.contains( "TranslationsPath" ) ){
@@ -937,666 +976,171 @@ void settings::setLocalizationLanguage( const QString& language )
 	m_settings.setValue( "Language",language ) ;
 }
 
-bool settings::startMinimized()
+void settings::setWindowDimensions( const QString& window,const QString& dimenstion )
 {
-	if( m_settings.contains( "StartMinimized" ) ){
-
-		return m_settings.value( "StartMinimized" ).toBool() ;
-	}else{
-		bool s = false ;
-
-		m_settings.setValue( "StartMinimized",s ) ;
-
-		return s ;
-	}
+	m_settings.setValue( "WindowDimensions_" + window,dimenstion ) ;
 }
 
-bool settings::passWordIsUTF8Encoded()
+QString settings::windowsDimensions( const QString& window )
 {
-	if( !m_settings.contains( "PassWordIsUTF8Encoded" ) ){
+	auto m = "WindowDimensions_" + window ;
 
-		m_settings.setValue( "PassWordIsUTF8Encoded",true ) ;
-	}
-
-	return m_settings.value( "PassWordIsUTF8Encoded" ).toBool() ;
-}
-
-void settings::setStartMinimized( bool e )
-{
-	m_settings.setValue( "StartMinimized",e ) ;
-}
-
-void settings::setFileManager( const QString& e )
-{
-	if( e.isEmpty() ){
-
-		m_settings.setValue( "FileManagerOpener",_file_manager() ) ;
-	}else{
-		m_settings.setValue( "FileManagerOpener",e ) ;
-	}
-}
-
-QString settings::preUnMountCommand()
-{
-	if( !m_settings.contains( "PreUnMountCommand" ) ){
-
-		m_settings.setValue( "PreUnMountCommand",QString() ) ;
-	}
-
-	return m_settings.value( "PreUnMountCommand" ).toString() ;
-}
-
-void settings::preUnMountCommand( const QString& e )
-{
-	m_settings.setValue( "PreUnMountCommand",e ) ;
-}
-
-void settings::runCommandOnMount( const QString& e )
-{
-	m_settings.setValue( "RunCommandOnMount",e ) ;
-}
-
-QString settings::runCommandOnMount()
-{
-	if( m_settings.contains( "RunCommandOnMount" ) ){
-
-		return m_settings.value( "RunCommandOnMount" ).toString() ;
-	}else{
-		QString s ;
-		m_settings.setValue( "RunCommandOnMount",s ) ;
-
-		return s ;
-	}
-}
-
-QString settings::runCommandOnInterval()
-{
-	if( !m_settings.contains( "runCommandOnInterval" ) ){
-
-		m_settings.setValue( "runCommandOnInterval",QString() ) ;
-	}
-
-	return m_settings.value( "runCommandOnInterval" ).toString() ;
-}
-
-void settings::runCommandOnInterval( const QString& e )
-{
-	m_settings.setValue( "runCommandOnInterval",e ) ;
-}
-
-int settings::runCommandOnIntervalTime()
-{
-	if( !m_settings.contains( "runCommandOnIntervalTime" ) ){
-
-		m_settings.setValue( "runCommandOnIntervalTime",10 ) ;
-	}
-
-	return m_settings.value( "runCommandOnIntervalTime" ).toInt() ;
-}
-
-void settings::runCommandOnIntervalTime( int e )
-{
-	m_settings.setValue( "runCommandOnIntervalTime",e ) ;
-}
-
-bool settings::reUseMountPoint()
-{
-	if( m_settings.contains( "ReUseMountPoint" ) ){
-
-		return m_settings.value( "ReUseMountPoint" ).toBool() ;
-	}else{
-		bool e = false ;
-
-		m_settings.setValue( "ReUseMountPoint",e ) ;
-
-		return e ;
-	}
-}
-
-void settings::reUseMountPoint( bool e )
-{
-	m_settings.setValue( "ReUseMountPoint",e ) ;
-}
-
-bool settings::autoOpenFolderOnMount()
-{
-	if( m_settings.contains( "AutoOpenFolderOnMount" ) ){
-
-		return m_settings.value( "AutoOpenFolderOnMount" ).toBool() ;
-	}else{
-		bool s = true ;
-		settings::autoOpenFolderOnMount( s ) ;
-		return s ;
-	}
-}
-
-void settings::autoOpenFolderOnMount( bool e )
-{
-	m_settings.setValue( "AutoOpenFolderOnMount",e ) ;
-}
-
-bool settings::autoCheck()
-{
-	if( m_settings.contains( "AutoCheckForUpdates" ) ){
-
-		return m_settings.value( "AutoCheckForUpdates" ).toBool() ;
-	}else{
-		bool s = false ;
-		settings::autoCheck( s ) ;
-		return s ;
-	}
-}
-
-void settings::allowExternalToolsToReadPasswords( bool e )
-{
-	m_settings.setValue( "allowExternalToolsToReadPasswords",e ) ;
-}
-
-bool settings::allowExternalToolsToReadPasswords()
-{
-	if( !m_settings.contains( "allowExternalToolsToReadPasswords" ) ){
-
-		m_settings.setValue( "allowExternalToolsToReadPasswords",false ) ;
-	}
-
-	return m_settings.value( "allowExternalToolsToReadPasswords" ).toBool() ;
-}
-
-bool settings::getOpenVolumeReadOnlyOption()
-{
-	return readOnlyWarning::getOpenVolumeReadOnlyOption() ;
-}
-
-bool settings::setOpenVolumeReadOnly( QWidget * parent,bool checked )
-{
-	return readOnlyWarning::showWarning( parent,checked ) ;
-}
-
-void settings::autoCheck( bool e )
-{
-	m_settings.setValue( "AutoCheckForUpdates",e ) ;
-}
-
-bool settings::readOnlyWarning()
-{
-	if( m_settings.contains( "ReadOnlyWarning" ) ){
-
-		return m_settings.value( "ReadOnlyWarning" ).toBool() ;
-	}else{
-		bool s = false ;
-		settings::readOnlyWarning( s ) ;
-		return s ;
-	}
-}
-
-void settings::readOnlyWarning( bool e )
-{
-	m_settings.setValue( "ReadOnlyWarning",e ) ;
-}
-
-bool settings::doNotShowReadOnlyWarning()
-{
-	if( m_settings.contains( "DoNotShowReadOnlyWarning" ) ){
-
-		return m_settings.value( "DoNotShowReadOnlyWarning" ).toBool() ;
-	}else{
-		bool s = true ;
-		settings::doNotShowReadOnlyWarning( s ) ;
-		return s ;
-	}
-}
-
-void settings::doNotShowReadOnlyWarning( bool e )
-{
-	m_settings.setValue( "DoNotShowReadOnlyWarning",e ) ;
-}
-
-bool settings::autoMountFavoritesOnStartUp()
-{
-	if( m_settings.contains( "AutoMountFavoritesOnStartUp" ) ){
-
-		return m_settings.value( "AutoMountFavoritesOnStartUp" ).toBool() ;
-	}else{
-		bool s = false ;
-		settings::autoMountFavoritesOnStartUp( s ) ;
-		return s ;
-	}
-}
-
-bool settings::useDarkMode()
-{
-	if( !m_settings.contains( "UseDarkMode" ) ){
-
-		m_settings.setValue( "UseDarkMode",false ) ;
-	}
-
-	return m_settings.value( "UseDarkMode" ).toBool() ;
-}
-
-void settings::useDarkMode( bool e )
-{
-	m_settings.setValue( "UseDarkMode",e ) ;
-}
-
-void settings::autoMountFavoritesOnStartUp( bool e )
-{
-	m_settings.setValue( "AutoMountFavoritesOnStartUp",e ) ;
-}
-
-void settings::autoMountBackEnd( const settings::walletBackEnd& e )
-{
-	m_settings.setValue( "AutoMountPassWordBackEnd",[ & ]()->QString{
-
-		if( e.isInvalid() ){
-
-			return "none" ;
-
-		}else if( e == LXQt::Wallet::BackEnd::internal ){
-
-			return "internal" ;
-
-		}else if( e == LXQt::Wallet::BackEnd::libsecret ){
-
-			return "libsecret" ;
-
-		}else if( e == LXQt::Wallet::BackEnd::kwallet ){
-
-			return "kwallet" ;
-
-		}else if( e == LXQt::Wallet::BackEnd::osxkeychain ){
-
-			return "osxkeychain" ;
-
-		}else if( e == LXQt::Wallet::BackEnd::windows_dpapi ){
-
-			return "windows_DPAPI" ;
-		}else{
-			return "none" ;
-		}
-	}() ) ;
-}
-
-QSettings &settings::backend()
-{
-	return m_settings ;
-}
-
-settings::walletBackEnd settings::autoMountBackEnd()
-{
-	if( m_settings.contains( "AutoMountPassWordBackEnd" ) ){
-
-		auto e = m_settings.value( "AutoMountPassWordBackEnd" ).toString() ;
-
-		if( e == "libsecret" ){
-
-			return LXQt::Wallet::BackEnd::libsecret ;
-
-		}else if( e == "kwallet" ){
-
-			return LXQt::Wallet::BackEnd::kwallet ;
-
-		}else if( e == "internal" ){
-
-			return LXQt::Wallet::BackEnd::internal ;
-
-		}else if( e == "osxkeychain" ){
-
-			return LXQt::Wallet::BackEnd::osxkeychain ;
-
-		}else if( e == "windows_DPAPI" ){
-
-			return LXQt::Wallet::BackEnd::windows_dpapi ;
-		}else{
-			return settings::walletBackEnd() ;
-		}
-	}else{
-		m_settings.setValue( "AutoMountPassWordBackEnd",QString( "none" ) ) ;
-		return settings::walletBackEnd() ;
-	}
-}
-
-void settings::autoMountFavoritesOnAvailable( bool e )
-{
-	m_settings.setValue( "AutoMountFavoritesOnAvailable",e ) ;
-}
-
-bool settings::autoMountFavoritesOnAvailable()
-{
-	if( m_settings.contains( "AutoMountFavoritesOnAvailable" ) ){
-
-		return m_settings.value( "AutoMountFavoritesOnAvailable" ).toBool() ;
-	}else{
-		settings::autoMountFavoritesOnAvailable( false ) ;
-		return false ;
-	}
-}
-
-void settings::showFavoritesInContextMenu( bool e )
-{
-	m_settings.setValue( "ShowFavoritesInContextMenu",e ) ;
-}
-
-bool settings::showFavoritesInContextMenu()
-{
-	if( !m_settings.contains( "ShowFavoritesInContextMenu" ) ){
-
-		m_settings.setValue( "ShowFavoritesInContextMenu",false ) ;
-	}
-
-	return m_settings.value( "ShowFavoritesInContextMenu" ).toBool() ;
-}
-
-int settings::networkTimeOut()
-{
-	if( !m_settings.contains( "NetworkTimeOutInSeconds" ) ){
-
-		m_settings.setValue( "NetworkTimeOutInSeconds",30 ) ;
-	}
-
-	return m_settings.value( "NetworkTimeOutInSeconds" ).toInt() ;
-}
-
-bool settings::showMountDialogWhenAutoMounting()
-{
-	if( m_settings.contains( "ShowMountDialogWhenAutoMounting" ) ){
-
-		return m_settings.value( "ShowMountDialogWhenAutoMounting" ).toBool() ;
-	}else{
-		settings::showMountDialogWhenAutoMounting( true ) ;
-		return true ;
-	}
-}
-
-bool settings::showUnlockedVolumesFromAllUsers()
-{
-	if( !m_settings.contains( "ShowUnlockedVolumesFromAllUsers" ) ){
-
-		m_settings.setValue( "ShowUnlockedVolumesFromAllUsers",false ) ;
-	}
-
-	return m_settings.value( "ShowUnlockedVolumesFromAllUsers" ).toBool() ;
-}
-
-void settings::showMountDialogWhenAutoMounting( bool e )
-{
-	m_settings.setValue( "ShowMountDialogWhenAutoMounting",e ) ;
-}
-
-int settings::checkForUpdateInterval()
-{
-	if( m_settings.contains( "CheckForUpdateInterval" ) ){
-
-		return m_settings.value( "CheckForUpdateInterval" ).toInt() * 1000 ;
-	}else{
-		int s = 10 ;
-		m_settings.setValue( "CheckForUpdateInterval",s ) ;
-		return s * 1000 ;
-	}
-}
-
-bool settings::ecryptfsAllowNotEncryptingFileNames()
-{
-	if( !m_settings.contains( "EcryptfsAllowNotEncryptingFileNames" ) ){
-
-		m_settings.setValue( "EcryptfsAllowNotEncryptingFileNames",false ) ;
-	}
-
-	return m_settings.value( "EcryptfsAllowNotEncryptingFileNames" ).toBool() ;
-}
-
-QString settings::ykchalrespArguments()
-{
-	if( !m_settings.contains( "YkchalrespArguments" ) ){
-
-		m_settings.setValue( "YkchalrespArguments","-2 -i -" ) ;
-	}
-
-	return m_settings.value( "YkchalrespArguments" ).toString() ;
-}
-
-QString settings::portSeparator()
-{
-	if( !m_settings.contains( "PortSeparator" ) ){
-
-		m_settings.setValue( "PortSeparator","####" ) ;
-	}
-
-	return m_settings.value( "PortSeparator" ).toString() ;
-}
-
-bool settings::yubikeyRemoveNewLine()
-{
-	if( !m_settings.contains( "yubikeyRemoveNewLine" ) ){
-
-		m_settings.setValue( "yubikeyRemoveNewLine",true ) ;
-	}
-
-	return m_settings.value( "yubikeyRemoveNewLine" ).toBool() ;
+	return this->getOption( m,QString() ) ;
 }
 
 QString settings::localizationLanguage()
 {
-	if( m_settings.contains( "Language" ) ){
-
-		return m_settings.value( "Language" ).toString() ;
-	}else{
-		QString s = "en_US" ;
-		m_settings.setValue( "Language",s ) ;
-		return s ;
-	}
+	return this->getOption( "Language",QString( "en_US" ) ) ;
 }
 
-QString settings::walletName( LXQt::Wallet::BackEnd s )
+bool settings::portableVersion()
 {
-	if( s == LXQt::Wallet::BackEnd::kwallet ){
+	return m_options.portableVersion() ;
+}
 
-		if( m_settings.contains( "KWalletName" ) ){
+settings::options::options( const utility::cliArguments& args )
+{
+	if( utility::platformIsWindows() ){
 
-			return m_settings.value( "KWalletName" ).toString() ;
+		m_exePath = utility::windowsApplicationDirPath() ;
+
+		if( args.runningUpdated() ){
+
+			m_dataPath = args.dataPath() ;
+
+			m_defaultPortableVersionDownloadFolder = args.originalPath() + "/Downloads" ;
+
+			m_portableVersion = args.portable() ;
+
+			m_exe3PartyBinPath = m_exePath + "/3rdParty" ;
+
+			if( !QFile::exists( m_exe3PartyBinPath ) ){
+
+				m_exe3PartyBinPath = args.originalPath() + "/3rdParty" ;
+			}
+
+			const auto& m = args.originalVersion() ;
+			const auto& mm = utility::runningVersionOfMediaDownloader() ;
+
+			utility::setHelpVersionOfMediaDownloader( m + "/" + mm ) ;
 		}else{
-			QString s = "default" ;
-			m_settings.setValue( "KWalletName",s ) ;
-			return s ;
-		}
-	}else{
-		return settings::instance().walletName() ;
-	}
-}
+			auto a = m_exePath  + "/local" ;
 
-void settings::windowDimensions::setDimensions( const QStringList& e )
-{
-	m_ok = int( e.size() ) == int( m_array.size() ) ;
+			m_exe3PartyBinPath = m_exePath + "/3rdParty" ;
 
-	if( m_ok ){
+			m_defaultPortableVersionDownloadFolder = m_exePath + "/Downloads" ;
 
-		for( size_t i = 0 ; i < m_array.size() ; i++ ){
+			if( utility::pathIsFolderAndExists( a ) ){
 
-			m_array[ i ] = static_cast< int >( e.at( static_cast< int >( i ) ).toInt( &m_ok ) ) ;
+				m_dataPath = a ;
 
-			if( !m_ok ){
+				m_portableVersion = true ;
+			}else{
+				m_dataPath = _configPath() ;
 
-				break ;
+				m_portableVersion = false ;
 			}
 		}
 	}else{
-		utility::debug() << "window dimensions do not match data structure size" ;
+		m_dataPath = _configPath() ;
+
+		m_portableVersion = false ;
 	}
 }
 
-settings::windowDimensions::windowDimensions( const QStringList& e )
+settings::proxySettings settings::getProxySettings()
 {
-	this->setDimensions( e ) ;
+	return { m_settings } ;
 }
 
-settings::windowDimensions::windowDimensions( const QString& e )
+settings::proxySettings::proxySettings( QSettings& s ) : m_settings( s )
 {
-	this->setDimensions( utility::split( e,' ' ) ) ;
+	if( !m_settings.contains( "ProxySettingsType" ) ){
+
+		m_settings.setValue( "ProxySettingsType","None" ) ;
+	}
 }
 
-settings::windowDimensions::windowDimensions( const std::array< int,size >& e )
-	: m_array( e ),m_ok( true )
+settings::proxySettings& settings::proxySettings::setProxySettings( settings::proxySettings::Type s,const QString& e )
 {
+	if( s == settings::proxySettings::Type::none ){
+
+		m_settings.setValue( "ProxySettingsType","None" ) ;
+
+	}else if( s == settings::proxySettings::Type::system ){
+
+		m_settings.setValue( "ProxySettingsType","System" ) ;
+
+	}else if( s == settings::proxySettings::Type::env ){
+
+		m_settings.setValue( "ProxySettingsType","Env" ) ;
+
+	}else if( s == settings::proxySettings::Type::manual ){
+
+		m_settings.setValue( "ProxySettingsType","Manual" ) ;
+
+		m_settings.setValue( "ProxySettingsCustomSource",e.toUtf8() ) ;
+	}
+
+	return *this ;
 }
 
-settings::windowDimensions::operator bool()
+settings::proxySettings::type settings::proxySettings::types() const
 {
-	return m_ok ;
-}
+	auto m = m_settings.value( "ProxySettingsType" ).toString() ;
 
-int settings::windowDimensions::columnWidthAt( std::array< int,size >::size_type s ) const
-{
-	auto e = s + 4 ;
+	if( m == "None" ){
 
-	if( e < m_array.size() ){
+		return settings::proxySettings::Type::none ;
 
-		return m_array[ e ] ;
+	}else if( m == "System" ){
+
+		return settings::proxySettings::Type::system ;
+
+	}else if( m == "Env" ){
+
+		return settings::proxySettings::Type::env ;
+
+	}else if( m == "Manual" ){
+
+		return settings::proxySettings::Type::manual ;
 	}else{
-		utility::debug() << "window dimension index out of range" ;
-		return 0 ;
+		m_settings.setValue( "ProxySettingsType","None" ) ;
+
+		return settings::proxySettings::Type::none ;
 	}
 }
 
-QRect settings::windowDimensions::geometry() const
+QByteArray settings::proxySettings::proxyAddress() const
 {
-	auto e = m_array.data() ;
-
-	return { *( e + 0 ),*( e + 1 ),*( e + 2 ),*( e + 3 ) } ;
+	return m_settings.value( "ProxySettingsCustomSource" ).toByteArray() ;
 }
 
-QString settings::windowDimensions::dimensions() const
+settings::mediaPlayer::mediaPlayer( const std::vector< settings::mediaPlayer::PlayerOpts >& s,Logger& logger ) :
+	m_playerOpts( s ),
+	m_logger( logger )
 {
-	auto _number = []( const int * s,size_t n ){ return QString::number( *( s + n ) ) ; } ;
+}
 
-	auto s = m_array.data() ;
+void settings::mediaPlayer::action::logError() const
+{
+	auto id = utility::sequentialID() ;
 
-	auto e = _number( s,0 ) ;
+	auto bar = utility::barLine() ;
 
-	using tp = decltype( m_array.size() ) ;
+	auto m = QObject::tr( "Failed To Start Executable %1" ) ;
 
-	for( tp i = 1 ; i < m_array.size() ; i++ ){
+	m_logger.add( bar,id ) ;
 
-		e += " " + _number( s,i ) ;
+	m_logger.add( m.arg( m_playerOpts.name ),id ) ;
+
+	m_logger.add( bar,id ) ;
+}
+
+void settings::mediaPlayer::action::operator()() const
+{
+	if( !QProcess::startDetached( m_playerOpts.exePath,{ m_url } ) ){
+
+		this->logError() ;
 	}
-
-	return e ;
-}
-
-settings::windowDimensions settings::getWindowDimensions()
-{
-	QString defaults = "205 149 861 466 326 320 101 76" ;
-
-	QSettings& s = settings::instance().backend() ;
-
-	if( s.contains( "Dimensions" ) ){
-
-		settings::windowDimensions e( s.value( "Dimensions" ).toString() ) ;
-
-		if( e ){
-
-			return e ;
-		}else{
-			utility::debug() << "failed to parse config option" ;
-			return defaults ;
-		}
-	}else{
-		s.setValue( "Dimensions",defaults ) ;
-		return defaults ;
-	}
-}
-
-void settings::setWindowDimensions( const settings::windowDimensions& e )
-{
-	settings::instance().backend().setValue( "Dimensions",e.dimensions() ) ;
-}
-
-settings::translator::translator()
-{
-	m_languages.emplace_back( QObject::tr( "Russian (RU)" ),"Russian (RU)","ru_RU" ) ;
-	m_languages.emplace_back( QObject::tr( "French (FR)" ),"French (FR)","fr_FR" ) ;
-	m_languages.emplace_back( QObject::tr( "German (DE)" ),"German (DE)","de_DE" ) ;
-	m_languages.emplace_back( QObject::tr( "English (US)" ),"English (US)","en_US" ) ;
-	m_languages.emplace_back( QObject::tr( "Swedish (SE)" ),"Swedish (SE)","sv_SE" ) ;
-	m_languages.emplace_back( QObject::tr( "Arabic (SA)" ) ,"Arabic (SA)","ar_SA" ) ;
-	m_languages.emplace_back( QObject::tr( "Spanish (MX)" ),"Spanish (MX)","es_MX" ) ;
-	m_languages.emplace_back( QObject::tr( "Spanish (SP)" ),"Spanish (SP))","es_ES" ) ;
-	m_languages.emplace_back( QObject::tr( "Chinese Simplified (zh-CN)" ),"Chinese Simplified (zh-CN)","zh_CN" ) ;
-}
-
-void settings::translator::setLanguage( const QByteArray& e )
-{
-	QCoreApplication::installTranslator( [ & ](){
-
-		this->clear() ;
-
-		m_translator = new QTranslator() ;
-
-		m_translator->load( e.constData(),settings::instance().localizationLanguagePath() ) ;
-
-		return m_translator ;
-	}() ) ;
-}
-
-settings::translator::~translator()
-{
-	this->clear() ;
-}
-
-const QString& settings::translator::UIName( const QString& internalName )
-{
-	for( const auto& it : m_languages ){
-
-		if( it.internalName == internalName ){
-
-			return it.UINameTranslated ;
-		}
-	}
-
-	static QString s ;
-	return s ;
-}
-
-const QString& settings::translator::name( const QString& UIName )
-{
-	for( const auto& it : m_languages ){
-
-		if( it.UINameTranslated == UIName ){
-
-			return it.internalName ;
-		}
-	}
-
-	static QString s ;
-	return s ;
-}
-
-QString settings::translator::translate( const QString& internalName )
-{
-	return QObject::tr( this->UINameUnTranslated( internalName ) ) ;
-}
-
-const char * settings::translator::UINameUnTranslated( const QString& internalName )
-{
-	for( const auto& it : m_languages ){
-
-		if( it.internalName == internalName ){
-
-			return it.UINameUnTranslated ;
-		}
-	}
-
-	return "" ;
-}
-
-void settings::translator::clear()
-{
-	if( m_translator ){
-
-		QCoreApplication::removeTranslator( m_translator ) ;
-		delete m_translator ;
-	}
-}
-
-settings::translator::entry::entry( const QString& a,const char * b,const QString& c ) :
-	UINameTranslated( a ),UINameUnTranslated( b ),internalName( c )
-{
 }

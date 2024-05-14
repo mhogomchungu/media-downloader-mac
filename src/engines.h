@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2018
+ *  Copyright (c) 2021
  *  name : Francis Banyikwa
  *  email: mhogomchungu@gmail.com
  *  This program is free software: you can redistribute it and/or modify
@@ -16,973 +16,1354 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
-#ifndef BACKEND_H
-#define BACKEND_H
-
-#include <vector>
-#include <memory>
-#include <functional>
-#include <utility>
+#ifndef ENGINES_H
+#define ENGINES_H
 
 #include <QString>
 #include <QStringList>
-#include <QWidget>
+#include <QStandardPaths>
+#include <QPlainTextEdit>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QDir>
+#include <QProcess>
+#include <QDateTime>
+#include <QNetworkProxy>
 
-#include "volumeinfo.h"
-#include "favorites.h"
-#include "utility.h"
+#include <vector>
+#include <functional>
+#include <memory>
+
+#include "logger.h"
+#include "util.hpp"
+#include "utils/threads.hpp"
+#include "utils/qprocess.hpp"
+
+class tableWidget ;
+class settings ;
+class Context ;
+
+namespace utility {
+	class uiIndex ;
+}
 
 class engines
 {
 public:
-	class engine ;
+	static bool filePathIsValid( const QFileInfo& ) ;
 
-	static QString executableNotEngineFullPath( const QString& ) ;
-	static QString executableFullPath( const QString& ) ;
-	static QString executableFullPath( const QString&,const engines::engine& ) ;
-
-	static QStringList executableSearchPaths() ;
-	static QStringList executableSearchPaths( const engines::engine& ) ;
-
-	class engineVersion{
+	class file
+	{
 	public:
-		engineVersion() ;
-		engineVersion( int major,int minor,int patch ) ;
-		engineVersion( const QString& e ) ;
-		bool valid() const ;
-		bool operator==( const engineVersion& other ) const ;
-		bool operator<( const engineVersion& other ) const ;
-		/*
-		 * a != b equal to !(a == b)
-		 * a <= b equal to (a < b) || (a == b)
-		 * a >= b equal to !(a < b)
-		 * a > b  equal to !(a <= b)
-		 */
-		bool operator>=( const engineVersion& other ) const
+		file( const QString& path,Logger& logger ) :
+			m_filePath( path ),m_file( m_filePath ),m_logger( logger )
 		{
-			return !( *this < other ) ;
 		}
-		bool operator<=( const engineVersion& other ) const
+		void write( const QString& ) ;
+		void write( const QJsonDocument&,
+			    QJsonDocument::JsonFormat = QJsonDocument::Indented ) ;
+		void write( const QJsonObject&,
+			    QJsonDocument::JsonFormat = QJsonDocument::Indented ) ;
+		QByteArray readAll() ;
+		QStringList readAllAsLines() ;
+		template< typename Function >
+		static void readAll( const QString& filePath,Logger& logger,Function function )
 		{
-			return ( *this < other ) || ( *this == other ) ;
-		}
-		bool operator!=( const engineVersion& other ) const
-		{
-			return !( *this == other ) ;
-		}
-		bool operator>( const engineVersion& other ) const
-		{
-			return !( *this <= other ) ;
-		}
-		QString toString() const ;
-	private:
-		bool m_valid = false ;
-		int m_major = 0 ;
-		int m_minor = 0 ;
-		int m_patch = 0 ;
-	};
+			struct result
+			{
+				bool success ;
+				QByteArray data ;
+			};
 
-	template< typename Type >
-	class cache{
-	public:
-	        cache( std::function< Type() > function ) : m_function( std::move( function ) )
-		{
-		}
-		cache() : m_function( [](){ return Type() ; } )
-		{
-		}
-		const Type& get() const
-		{
-		        if( m_unset ){
+			utils::qthread::run( [ filePath ]()->result{
 
-			        m_unset = false ;
+				QFile f( filePath ) ;
 
-				m_variable = utility::unwrap( Task::run( [ this ]{ return m_function() ; } ) ) ;
-			}
+				if( f.open( QIODevice::ReadOnly ) ){
 
-			return m_variable ;
-		}
-		virtual ~cache()
-		{
-		}
-	private:
-		std::function< Type() > m_function ;
-		mutable Type m_variable ;
-		mutable bool m_unset = true ;
-	};
-
-	class version : public cache< engines::engineVersion >{
-	public:
-	        enum class Operator{ less,lessOrEqual,equal,notEqual,greater,greaterOrEqual } ;
-
-		version( const QString& e,std::function< engines::engineVersion() > s ) :
-			cache( std::move( s ) ),
-			m_engineName( e )
-		{
-		}
-		version()
-		{
-		}
-		utility::bool_result compare( const engines::engineVersion& b,
-					      engines::version::Operator op ) const
-		{
-			const auto& a = this->get() ;
-
-			if( a.valid() && b.valid() ){
-
-			        switch( op ) {
-
-				        case engines::version::Operator::less :           return a < b ;
-				        case engines::version::Operator::lessOrEqual :    return a <= b ;
-				        case engines::version::Operator::equal :          return a == b ;
-				        case engines::version::Operator::notEqual :       return a != b ;
-				        case engines::version::Operator::greater :        return a > b ;
-				        case engines::version::Operator::greaterOrEqual : return a >= b ;
+					return { true,f.readAll() } ;
+				}else{
+					return { false,{} } ;
 				}
-			}
 
-			return {} ;
-		}
-		QString toString() const
-		{
-			return this->get().toString() ;
-		}
-		utility::bool_result greaterOrEqual( int major,int minor,int patch ) const
-		{
-			return this->compare( { major,minor,patch },engines::version::Operator::greaterOrEqual ) ;
-		}
-		utility::bool_result greaterOrEqual( const QString& v ) const
-		{
-		        return this->compare( v,engines::version::Operator::greaterOrEqual ) ;
-		}
-		virtual void logError() const ;
-	private:
-		QString m_engineName ;
-	};
+			},[ &logger,filePath,function = std::move( function ) ]( result r ){
 
-	class booleanCache : public cache< utility::bool_result >{
-	public:
-		booleanCache( std::function< utility::bool_result() > s ) :
-		        cache( std::move( s ) )
-		{
-		}
-		operator bool() const
-		{
-		        return this->get().value() ;
+				if( r.success ){
+
+					function( true,r.data ) ;
+				}else{
+					engines::file( filePath,logger ).failToOpenForReading() ;
+					function( false,r.data ) ;
+				}
+			} ) ;
 		}
 	private:
-		virtual void silenceWarning() ;
-	};
-
-	class versionGreaterOrEqual : public cache< utility::bool_result >{
-	public:
-	        versionGreaterOrEqual( bool m,const engines::engine& engine,int major,int minor,int patch ) :
-		        cache( [ this,&engine,m,major,minor,patch ](){ return this->setCallback( m,engine,major,minor,patch ) ; } )
-		{
-		}
-		versionGreaterOrEqual( bool m,const engines::engine& engine,const QString& e ) :
-		        cache( [ this,&engine,m,e ](){ return this->setCallback( m,engine,e ) ; } )
-		{
-		}
-		operator bool() const
-		{
-		        return this->get().value() ;
-		}
-	private:
-		bool setCallback( bool m,const engines::engine& engine,int major,int minor,int patch ) ;
-		bool setCallback( bool m,const engines::engine& engine,const QString& ) ;
-		virtual void silenceWarning() ;
+		void failToOpenForReading() ;
+		void failToOpenForWriting() ;
+		QString m_filePath ;
+		QFile m_file ;
+		Logger& m_logger ;
 	} ;
 
-	class exeFullPath : public cache< QString >{
+	class ProcessExitState
+	{
 	public:
-	        exeFullPath( std::function< QString() > s ) : cache( std::move( s ) )
+		enum class ExitStatus{ FailedToStart,NormalExit,Crashed } ;
+
+		ProcessExitState()
 		{
 		}
+		ProcessExitState( bool c,int s,qint64 d,ProcessExitState::ExitStatus e ) :
+			m_cancelled( c ),
+			m_exitCode( s ),
+			m_duration( d ),
+			m_exitStatus( e )
+		{
+		}
+		ProcessExitState( bool c,int s,qint64 d,QProcess::ExitStatus e ) :
+			m_cancelled( c ),
+			m_exitCode( s ),
+			m_duration( d )
+		{
+			if( e == QProcess::ExitStatus::NormalExit ){
+
+				m_exitStatus = ProcessExitState::ExitStatus::NormalExit ;
+
+			}else if( e == QProcess::ExitStatus::CrashExit ){
+
+				m_exitStatus = ProcessExitState::ExitStatus::Crashed ;
+			}else{
+				m_exitStatus = ProcessExitState::ExitStatus::FailedToStart ;
+			}
+		}
+		int exitCode() const
+		{
+			return m_exitCode ;
+		}
+		const ProcessExitState::ExitStatus& exitStatus() const
+		{
+			return m_exitStatus ;
+		}
+		bool cancelled() const
+		{
+			return m_cancelled ;
+		}
+		bool success() const
+		{
+			return m_exitCode == 0 && m_exitStatus == ProcessExitState::ExitStatus::NormalExit ;
+		}
+		qint64 duration() const
+		{
+			return m_duration ;
+		}
+		ProcessExitState move()
+		{
+			return std::move( *this ) ;
+		}
 	private:
-		virtual void silenceWarning() ;
+		bool m_cancelled = false ;
+		int m_exitCode = 255 ;
+		qint64 m_duration = 0 ;
+		ProcessExitState::ExitStatus m_exitStatus = ProcessExitState::ExitStatus::NormalExit ;
 	};
+
+	class enginePaths
+	{
+	public:
+		enginePaths( settings& ) ;
+
+		const QString& basePath() const
+		{
+			return m_basePath ;
+		}
+		const QString& binPath() const
+		{
+			return m_binPath ;
+		}
+		const QString& enginePath() const
+		{
+			return m_enginePath ;
+		}
+		const QString& dataPath() const
+		{
+			return m_dataPath ;
+		}
+		const QString& updatePath() const
+		{
+			return m_updatePath ;
+		}
+		const QString& tmp() const
+		{
+			return m_tmp ;
+		}
+		const QString updateNewPath() const
+		{
+			return m_updateNewPath ;
+		}
+		QString tmp( const QString& e ) const
+		{
+			return _add( m_tmp,e ) ;
+		}
+		QString updatePath( const QString& e ) const
+		{
+			return _add( m_updatePath,e ) ;
+		}
+		QString dataPath( const QString& e ) const
+		{
+			return _add( m_dataPath,e ) ;
+		}
+		QString subscriptionsArchiveFilePath() const
+		{
+			return _add( m_dataPath,"subscriptions_archive_file.txt" ) ;
+		}
+		QString binPath( const QString& e ) const
+		{
+			return _add( m_binPath,e ) ;
+		}
+		QString themePath() const
+		{
+			return _add( m_dataPath,"themes" ) ;
+		}
+		QString enginePath( const QString& e ) const
+		{
+			return _add( m_enginePath,e ) ;
+		}
+		QString socketPath() ;
+		void confirmPaths( Logger& ) const ;
+	private:
+		QString _add( const QString& basePath,const QString& toAdd ) const
+		{
+			if( basePath.endsWith( "/" ) ){
+
+				return basePath + toAdd ;
+			}else{
+				return basePath + "/" + toAdd ;
+			}
+		}
+		QString m_binPath ;
+		QString m_enginePath ;
+		QString m_basePath ;
+		QString m_dataPath ;
+		QString m_updatePath ;
+		QString m_updateNewPath ;
+		QString m_tmp ;
+	} ;
+
+	struct metadata
+	{
+		qint64 size = 0 ;
+		QString url ;
+		QString fileName ;
+		metadata move()
+		{
+			return std::move( *this ) ;
+		}
+	} ;
 
 	class engine
 	{
-	protected:
-		class commandOptions ;
 	public:
-		struct unMount{
-
-			const QString& cipherFolder ;
-			const QString& mountPoint ;
-			const engines::engine& engine ;
-			int numberOfAttempts ;
-		} ;
-
-		class Wrapper{
-		public:
-			Wrapper( const engines::engine& e ) :
-			        m_engine( std::addressof( e ) )
-			{
-			}
-			Wrapper() :
-			        m_engine( std::addressof( engines::instance().getUnKnown() ) )
-			{
-			}
-			const engines::engine& get() const
-			{
-				return *m_engine ;
-			}
-			const engines::engine& get()
-			{
-				return *m_engine ;
-			}
-			const engines::engine * operator->() const
-			{
-				return m_engine ;
-			}
-			const engines::engine * operator->()
-			{
-				return m_engine ;
-			}
-		private:
-			const engines::engine * m_engine ;
-		};
-
-		enum class error{ Success,Failed,Timeout,Continue } ;
-
-		enum class status
-		{
-			success,
-			volumeCreatedSuccessfully,
-
-			fuserMountNotFound,
-
-			backendRequiresPassword,
-			badPassword,
-
-			ecryptfs_simpleNotFound,
-			engineExecutableNotFound,
-			javaNotFound,
-
-			cryfsMigrateFileSystem,
-			cryfsReplaceFileSystem,
-			cryfsVersionTooOldToMigrateVolume,
-
-			backEndDoesNotSupportCustomConfigPath,
-			notSupportedMountPointFolderPath,
-			mountPointFolderNotEmpty,
-			IllegalPath,
-
-		        backendFailedToMeetSiriKaliMinimumVersion,
-			backEndFailedToMeetMinimumRequirenment,
-
-			fscryptPartialVolumeClose,
-			failedToLoadWinfsp,
-			fscryptKeyFileRequired,
-
-			failedToStartPolkit,
-			failedToUnMount,
-			failedToCreateMountPoint,
-
-			invalidConfigFileName,
-			backendFail,
-			backendCrashed,
-			backendTimedOut,
-			unknown
-		} ;
-
-		struct exe_args{
-			exe_args( QString e,QStringList s ) :
-				exe( std::move( e ) ),args( std::move( s ) )
-			{
-			}
-			exe_args()
-			{
-			}
-			exe_args( engines::engine::status e ) : error( e )
-			{
-			}
-			engines::engine::status error = engines::engine::status::success ;
-			QString exe ;
-			QStringList args ;
-		};
-
-		struct exe_args_const{
-			exe_args_const( const exe_args& e ) : exe( e.exe ),args( e.args )
-			{
-			}
-			exe_args_const( const QString& e,const QStringList& s ) :
-				exe( e ),args( s )
-			{
-			}
-			const QString& exe ;
-			const QStringList& args ;
-		};
-
-		class cmdStatus
+		class exeArgs
 		{
 		public:
-			cmdStatus() ;
-			cmdStatus( engines::engine::status s,
-				   const engines::engine&,
-				   const QString& e = QString() ) ;
-			engines::engine::status status() const ;
-			bool operator==( engines::engine::status s ) const ;
-			bool operator!=( engines::engine::status s ) const ;
-			QString toString() const ;
-			QString toMiniString() const ;
-			const engines::engine& engine() const ;
-			bool success() const ;
-		private:
-			engines::engine::status m_status = engines::engine::status::backendFail ;
-			QString m_message ;
-			engines::engine::Wrapper m_engine ;
-		} ;
-
-		struct booleanOptions{
-
-			booleanOptions() = default ;
-
-			booleanOptions( const booleanOptions& other ) = default ;
-
-			booleanOptions( bool ro,bool rm,bool ar,bool au ) :
-				unlockInReadOnly( ro ),
-				unlockInReverseMode( rm ),
-				allowReplacedFileSystem( ar ),
-				allowUpgradeFileSystem( au )
+			class cmd
 			{
-			}
-			booleanOptions& operator=( const booleanOptions& other ) = default ;
-			bool unlockInReadOnly = false ;
-			bool unlockInReverseMode = false ;
-			bool allowReplacedFileSystem = true ;
-			bool allowUpgradeFileSystem = false ;
-		} ;
-
-		struct createGUIOptions{
-
-			struct createOptions
-			{
-				createOptions( const QString& createOpts,
-					       const QString& configFile,
-					       const QString& keyFile,
-					       const engines::engine::booleanOptions& r ) ;
-
-				createOptions( const QString& createOpts,
-					       const QString& configFile,
-					       const QString& keyFile ) ;
-
-				createOptions( const engines::engine::booleanOptions& r ) ;
-
-				createOptions() ;
-
-				QString idleTimeOut ;
-				QString configFile ;
-				QString keyFile ;
-				QStringList createOpts ;
-				engines::engine::booleanOptions opts ;
-				bool success = true ;
-			} ;
-
-			createGUIOptions( QWidget * w,
-					  const engines::engine::createGUIOptions::createOptions& s,
-					  std::function< void( const createGUIOptions::createOptions& ) > f ) :
-				parent( w ),
-				cOpts( s ),
-				fCreateOptions( std::move( f ) )
-			{
-			}
-			QWidget * parent ;
-			const engines::engine::createGUIOptions::createOptions& cOpts ;
-			std::function< void( const createGUIOptions::createOptions& ) > fCreateOptions ;
-		};
-
-		struct mountGUIOptions{
-
-			struct mountOptions{
-
-				mountOptions( const favorites::entry& ) ;
-
-				mountOptions( const QString& idleTimeOut,
-					      const QString& configFile,
-					      const QString& mountOpes,
-					      const QString& keyFile,
-				              const QString& identityFile,
-				              const QString& identityAgent,
-					      const engines::engine::booleanOptions& opts ) ;
-				mountOptions() ;
-				QString idleTimeOut ;
-				QString configFile ;
-				QString keyFile ;
-				QString identityFile ;
-				QString identityAgent ;
-				QStringList mountOpts ;
-				engines::engine::booleanOptions opts ;
-				bool success = true ;
-			} ;
-
-			mountGUIOptions( QWidget * w,
-					 bool c,
-					 const engines::engine::mountGUIOptions::mountOptions& ll,
-					 std::function< void( const mountGUIOptions::mountOptions& ) > f ) :
-				parent( w ),
-				create( c ),
-				mOpts( ll ),
-				fMountOptions( std::move( f ) )
-			{
-			}
-			QWidget * parent ;
-			bool create ;
-			const engines::engine::mountGUIOptions::mountOptions& mOpts ;
-			std::function< void( const mountGUIOptions::mountOptions& ) > fMountOptions ;
-		} ;
-
-		using mOpts = engines::engine::mountGUIOptions::mountOptions ;
-		using cOpts = engines::engine::createGUIOptions::createOptions ;
-
-		using fcreate = std::function< void( const engines::engine::cOpts& ) > ;
-		using fmount = std::function< void( const engines::engine::mOpts& ) > ;
-
-		struct cmdArgsList
-		{
-			cmdArgsList( const favorites::entry& e,
-				     const QByteArray& volumeKey = QByteArray() ) ;
-
-			cmdArgsList( const QString& cipher_folder,
-				     const QString& plain_folder,
-				     const QByteArray& volume_key,
-				     const engines::engine::createGUIOptions::createOptions& ) ;
-
-			cmdArgsList( const QString& cipher_folder,
-				     const QString& plain_folder,
-				     const QByteArray& volume_key,
-				     const engines::engine::mountGUIOptions::mountOptions& ) ;
-
-			QString cipherFolder ;
-			QString mountPoint ;
-			QByteArray key ;
-			QString idleTimeout ;
-			QString configFilePath ;
-			QString identityFile ;
-			QString identityAgent ;
-			QStringList mountOptions ;
-			QStringList createOptions ;
-			QString keyFile ;
-			QString fuseOptionsSeparator ;
-			booleanOptions boolOptions ;
-		} ;
-
-		struct BaseOptions
-		{
-			struct vInfo{
-
-				QString versionArgument ;
-				bool readFromStdOut ;
-				int argumentNumber ;
-				int argumentLine ;
-			};
-
-			std::vector< vInfo > versionInfo ;
-			int  backendTimeout ;
-			bool hasConfigFile ;
-			bool setsCipherPath ;
-			bool autoMountsOnCreate ;
-			bool hasGUICreateOptions ;
-			bool supportsMountPathsOnWindows ;
-			bool requiresAPassword ;
-			bool customBackend ;
-			bool requiresPolkit ;
-			bool autorefreshOnMountUnMount ;
-			bool backendRequireMountPath ;
-			bool takesTooLongToUnlock ;
-			bool backendRunsInBackGround ;
-			bool acceptsSubType ;
-			bool acceptsVolName ;
-			bool likeSsh ;
-			bool autoCreatesMountPoint ;
-			bool autoDeletesMountPoint ;
-			bool usesOnlyMountPoint ;
-			bool usesFuseArgumentSwitch ;
-			bool windowsCanUnlockInReadWriteMode = false ;
-
-			QByteArray passwordFormat ;
-			QString displayName ;
-			QString releaseURL ;
-			QString versionMinimum ;
-			QString sirikaliMinimumVersion ;
-			QString reverseString ;
-			QString idleString ;
-			QString incorrectPassWordCode ;
-			QString configFileArgument ;
-			QString keyFileArgument ;
-			QString windowsInstallPathRegistryKey ;
-			QString windowsInstallPathRegistryValue ;
-			QString windowsExecutableFolderPath ;
-			QString mountControlStructure ;
-			QString createControlStructure ;
-			QString defaultFavoritesMountOptions ;
-
-			QStringList incorrectPasswordText ;
-			QStringList executableNames ;
-			QStringList windowsUnMountCommand ;
-			QStringList unMountCommand ;
-			QStringList volumePropertiesCommands ;
-			QStringList successfulMountedList ;
-			QStringList failedToMountList ;
-			QStringList names ;
-			QStringList fuseNames ;
-			QStringList configFileNames ;
-			QStringList fileExtensions ;
-
-			engines::engine::status notFoundCode ;
-		} ;
-
-		struct args
-		{
-			args() ;
-			args( const cmdArgsList&,
-			      const engines::engine::commandOptions&,
-			      const QString& cmd,
-			      const QStringList& ) ;
-			QString cmd ;
-			QString cipherPath ;
-			QString mountPath ;
-			QString mode ;
-			QString subtype ;
-			QStringList cmd_args ;
-			QStringList fuseOptions ;
-		} ;
-
-		static QString encodeMountPath( const QString& e ) ;
-
-		static void encodeSpecialCharacters( QString& ) ;
-		static void decodeSpecialCharacters( QString& ) ;
-
-		static QString decodeSpecialCharactersConst( const QString& ) ;
-
-		static const QString& javaFullPath() ;
-		static const QString& fuserMountPath() ;
-
-		bool isInstalled() const ;
-		bool isNotInstalled() const ;
-		bool unknown() const ;
-		bool known() const ;
-		bool setsCipherPath() const ;
-		bool autoMountsOnCreate() const ;
-		bool hasGUICreateOptions() const ;
-		bool hasConfigFile() const ;
-		bool supportsMountPathsOnWindows() const ;
-		bool customBackend() const ;
-		bool autorefreshOnMountUnMount() const ;
-		bool backendRequireMountPath() const ;
-		bool runsInBackGround() const ;
-		bool runsInForeGround() const ;
-		bool acceptsSubType() const ;
-		bool acceptsVolName() const ;
-		bool likeSsh() const ;
-		bool autoCreatesMountPoint() const ;
-		bool autoDeletesMountPoint() const ;
-		bool requiresAPassword() const ;
-		bool requiresNoPassword() const ;
-		bool usesOnlyMountPoint() const ;
-		bool needsJava() const ;
-		bool usesFuseArgumentSwitch() const ;
-		bool windowsCanUnlocInReadWriteMode() const ;
-
-		engines::engine::status notFoundCode() const ;
-
-		int backendTimeout() const ;
-
-		const QStringList& names() const ;
-		const QStringList& fuseNames() const ;
-		const QStringList& configFileNames() const ;
-		const QStringList& fileExtensions() const ;
-		const QStringList& volumePropertiesCommands() const ;
-		const QStringList& incorrectPasswordText() const ;
-
-		const engines::version& installedVersion() const ;
-
-		const QString& defaultFavoritesMountOptions() const ;
-
-		const QString& executableFullPath() const ;
-
-		const QString& minimumVersion() const ;
-		const QString& sirikaliMinimumVersion() const ;
-		const QString& reverseString() const ;
-		const QString& idleString() const ;
-		const QString& releaseURL() const ;
-		const QString& executableName() const ;
-		const QString& name() const ;
-		const QString& displayName() const ;
-		const QString& uiName() const ;
-		const QString& configFileName() const ;
-		const QString& keyFileArgument() const ;
-		const QString& mountControlStructure() const ;
-		const QString& createControlStructure() const ;
-		const QString& incorrectPasswordCode() const ;
-		const QString& configFileArgument() const ;
-		const QString& windowsInstallPathRegistryKey() const ;
-		const QString& windowsInstallPathRegistryValue() const ;
-		const QString& windowsExecutableFolderPath() const ;
-		const QString& windowsUnmountExecutableFullPath() const ;
-
-		QByteArray setPassword( const QByteArray& ) const ;
-
-		engine( BaseOptions ) ;
-
-		virtual ~engine() ;
-
-		class terminate_process{
-		public:
-		        terminate_process( QProcess& exe,const QString& mountPath ) :
-				m_exe( &exe ),m_mountPath( mountPath )
-			{
-			}
-			terminate_process( const QString& mountPath ) :
-				m_exe( nullptr ),m_mountPath( mountPath )
-			{
-			}
-			qint64 PID() const
-			{
-				if( m_exe ){
-
-					return m_exe->processId() ;
-				}else{
-					utility::debug() << "Warning, accessing invalid entry in terminate_process::PID" ;
-					return 0 ;
-				}
-			}
-			const QString& mountPath() const
-			{
-				 return m_mountPath ;
-			}
-			void terminate() const
-			{
-				if( m_exe ){
-
-					m_exe->terminate() ;
-				}else{
-					utility::debug() << "Warning, accessing invalid entry in terminate_process::terminate" ;
-				}
-			}
-			bool waitForFinished() const
-			{
-				if( m_exe ){
-
-					return utility::waitForFinished( *m_exe ) ;
-				}else{
-					utility::debug() << "Warning, accessing invalid entry in terminate_process::waitForFinished" ;
-					return false ;
-				}
-			}
-		private:
-			QProcess * m_exe ;
-			const QString& m_mountPath ;
-		};
-
-		struct terminate_result{
-
-			Task::process::result result ;
-			QString exe ;
-			QStringList args ;
-		} ;
-
-		engines::engine::exe_args unMountCommand( const engines::engine::terminate_process& e ) const ;
-
-		virtual const QStringList& windowsUnmountCommand() const ;
-
-		virtual terminate_result terminateProcess( const terminate_process& ) const ;
-
-		virtual terminate_result terminateProcess( const QString& mountPath ) const ;
-
-		virtual engine::engine::error errorCode( const QString& ) const ;
-
-		virtual void updateVolumeList( const engines::engine::cmdArgsList& ) const ;
-
-		virtual volumeInfo::List mountInfo( const volumeInfo::List& ) const ;
-
-		virtual bool canShowVolumeProperties() const ;
-
-		virtual Task::future< QString >& volumeProperties( const QString& cipherFolder,
-								   const QString& mountPoint ) const ;
-
-		virtual engines::engine::status unmount( const engines::engine::unMount& ) const ;
-
-		class commandStatusOpts
-		{
-		public:
-			commandStatusOpts( utility::Task s,
-					   const engines::engine::args& e,
-					   bool creating ) :
-				m_task( std::move( s ) ),m_args( e ),m_creating( creating )
-			{
-			}
-			const QByteArray& stdOut() const
-			{
-				return m_task.stdOut() ;
-			}
-			const QByteArray& stdError() const
-			{
-				return m_task.stdError() ;
-			}
-			bool success() const
-			{
-				return m_task.success() ;
-			}
-			int exitCode() const
-			{
-				return m_task.exitCode() ;
-			}
-			const engines::engine::args& args() const
-			{
-				return m_args ;
-			}
-			bool creating() const
-			{
-				return m_creating ;
-			}
-		private:
-			utility::Task m_task ;
-			const engines::engine::args& m_args ;
-			bool m_creating ;
-		} ;
-
-		virtual engines::engine::cmdStatus commandStatus( const commandStatusOpts& ) const ;
-
-		virtual bool requiresAPassword( const engines::engine::cmdArgsList& ) const ;
-
-		virtual bool takesTooLongToUnlock() const ;
-
-		virtual void aboutToExit() const ;
-
-		virtual QByteArray prepareBackend() const ;
-
-		virtual engine::engine::status passAllRequirenments( const engines::engine::cmdArgsList& ) const ;
-
-		struct ownsCipherFolder{
-			bool yes ;
-			QString cipherPath ;
-			QString configPath ;
-		} ;
-
-		virtual ownsCipherFolder ownsCipherPath( const QString& cipherPath,
-		                                         const QString& configPath ) const ;
-
-		virtual void updateOptions( engines::engine::commandOptions& opts,
-					    const engines::engine::cmdArgsList& args,
-					    bool creating ) const ;
-
-		virtual void updateOptions( engines::engine::cmdArgsList&,bool creating ) const ;
-
-		virtual void updateOptions( QStringList&,
-					    const engines::engine::cmdArgsList&,
-					    bool creating ) const ;
-
-		virtual const QProcessEnvironment& getProcessEnvironment() const ;
-
-
-		virtual utility2::LOGLEVEL allowLogging( const QStringList& ) const ;
-
-		virtual bool requiresPolkit() const ;
-
-		virtual bool createMountPath( const QString& ) const ;
-
-		virtual bool createCipherPath( const QString& ) const ;
-
-		virtual bool deleteFolder( const QString&,int = 1 ) const ;
-
-		virtual args command( const QByteArray& password,
-				      const engines::engine::cmdArgsList& args,
-				      bool create ) const ;
-
-		virtual engines::engine::status errorCode( const QString& e,const QString& err,int s ) const ;
-
-		virtual void GUICreateOptions( const createGUIOptions& ) const ;
-
-		virtual void GUIMountOptions( const mountGUIOptions& ) const ;
-	protected:
-		bool unmountVolume( const engine::engine::exe_args_const& exe,bool usePolkit ) const ;
-
-		class commandOptions{
-		public:
-			class fuseOptions ;
-
-			class Options{
 			public:
-				Options( QStringList& m ) : m_options( m )
+				cmd()
 				{
 				}
-				template< typename E >
-				void add( E&& e )
+				cmd( const engines::engine::exeArgs& exeArgs,
+				     const QStringList& args ) :
+					m_args( exeArgs.exe() ),
+					m_exe( m_args.takeAt( 0 ) )
 				{
-					m_options.append( e ) ;
+					m_args.append( exeArgs.args() ) ;
+					m_args.append( args ) ;
 				}
-				template< typename E,typename ... T >
-				void add( E&& e,T&& ... m )
+				const QString& exe() const
 				{
-					this->add( std::forward< E >( e ) ) ;
-					this->add( std::forward< T >( m ) ... ) ;
+					return m_exe ;
 				}
-				template< typename E >
-				void addFront( E&& e )
+				const QStringList& args() const
 				{
-					m_options.insert( 0,std::forward< E >( e ) ) ;
+					return m_args ;
 				}
-				bool doesNotContain( const QString& key ) const
+				bool valid()
 				{
-					return !this->contains( key ) ;
-				}
-				bool contains( const QString& key ) const
-				{
-					for( const auto& it : m_options ){
+					QFileInfo info( m_exe ) ;
 
-						if( it.contains( key,Qt::CaseInsensitive ) ){
-
-							return true ;
-						}
-					}
-
-					return false ;
-				}
-				const QStringList& get() const
-				{
-					return m_options ;
-				}
-				utility2::result< QString > extractStartsWith( const QString& e )
-				{
-					for( int i = 0 ; i < m_options.size() ; i++ ){
-
-						if( m_options[ i ].startsWith( e ) ){
-
-							return m_options.takeAt( i ) ;
-						}
-					}
-
-					return {} ;
-				}
-				utility2::result_ref< QString& > optionStartsWith( const QString& e )
-				{
-					for( int i = 0 ; i < m_options.size() ; i++ ){
-
-						if( m_options[ i ].startsWith( e ) ){
-
-							return m_options[ i ] ;
-						}
-					}
-
-					return {} ;
+					return engines::filePathIsValid( info ) ;
 				}
 			private:
-				QStringList& m_options ;
-			};
-
-			class fuseOptions : public Options
-			{
-			public:
-				fuseOptions( QStringList& m ) : Options( m )
-				{
-				}
+				QStringList m_args ;
+				QString m_exe ;
 			} ;
 
-			class exeOptions : public Options
+			exeArgs() = default;
+			exeArgs( const QString& e ) :
+				m_exe( e ),m_realExe( e )
 			{
-			public:
-				exeOptions( QStringList& m ) : Options( m )
-				{
+			}
+			exeArgs( const QString& e,const QString& r,const QStringList& s ) :
+				m_exe( e ),m_realExe( r ),m_options( s )
+			{
+			}
+			exeArgs( const QStringList& e,const QString& r,const QStringList& s ) :
+				m_exe( e ),m_realExe( r ),m_options( s )
+			{
+			}
+			bool isEmpty() const
+			{
+				return m_realExe.isEmpty() ;
+			}
+			const QStringList& exe() const
+			{
+				return m_exe ;
+			}
+			const QStringList& args() const
+			{
+				return m_options ;
+			}
+			const QString& realExe() const
+			{
+				return m_realExe ;
+			}
+			void updateRealExe( const QString& e )
+			{
+				if( m_exe.at( 0 ) == m_realExe ){
+
+					m_exe[ 0 ] = e ;
+					m_realExe  = e ;
+				}else{
+					m_realExe = e ;
 				}
-			} ;
-
-			commandOptions() ;
-			commandOptions( bool creating,
-			                const engines::engine& engine,
-			                const engines::engine::cmdArgsList& e ) ;
-
-			const QStringList& constExeOptions() const
-			{
-				return m_exeOptions ;
-			}
-			const QStringList& constFuseOpts() const
-			{
-				return m_fuseOptions ;
-			}
-			const QString& subType() const
-			{
-				return m_subtype ;
-			}
-			const QString& mode() const
-			{
-				return m_mode ;
-			}
-			exeOptions exeOptions()
-			{
-				return m_exeOptions ;
-			}
-			fuseOptions fuseOpts()
-			{
-				return m_fuseOptions ;
 			}
 		private:
-			QStringList m_exeOptions ;
-			QStringList m_fuseOptions ;
-			QString m_subtype ;
-			QString m_mode ;
-		};
+			QStringList m_exe ;
+			QString m_realExe ;
+			QStringList m_options ;
+		} ;
+
+		class functions
+		{
+		public:
+			class finishedState
+			{
+			public:
+				template< typename Args >
+				finishedState( const Args& a ) :
+				        m_success( a.success() ),
+				        m_cancelled( a.cancelled() ),
+					m_duration( a.duration() ),
+					m_errorCode( a.exitCode() ),
+					m_exitStatus( a.exitStatus() )
+				{
+				}
+				bool success() const
+				{
+					return m_success ;
+				}
+				bool cancelled() const
+				{
+				        return m_cancelled ;
+				}
+				qint64 duration() const
+				{
+				        return m_duration ;
+				}
+				int errorCode() const
+				{
+					return m_errorCode ;
+				}
+				engines::ProcessExitState::ExitStatus exitStatus() const
+				{
+					return m_exitStatus ;
+				}
+			private:
+				bool m_success ;
+				bool m_cancelled ;
+				qint64 m_duration ;
+				int m_errorCode ;
+				engines::ProcessExitState::ExitStatus m_exitStatus ;
+			};
+
+			enum class errors{ unknownUrl,notSupportedUrl,noNetwork,unknownFormat } ;
+			static QString errorString( const engine::engine::functions::finishedState&,
+						    engines::engine::functions::errors,
+						    const QString& ) ;
+			static QString processCompleteStateText( const engine::engine::functions::finishedState& ) ;
+
+			class timer
+			{
+			public:
+				static bool timerText( const QString& e ) ;
+				static QString timerText() ;
+				static QString startTimerText() ;
+				static QString stringElapsedTime( qint64 ) ;
+				static QString duration( qint64 ) ;
+				static int toSeconds( const QString& ) ;
+				static qint64 currentTime() ;
+				qint64 elapsedTime() ;
+				QString stringElapsedTime() ;
+				void reset() ;
+			private:
+				qint64 m_startTime = engines::engine::functions::timer::currentTime() ;
+			};
+
+			class preProcessing
+			{
+			public:
+				preProcessing() ;
+				preProcessing( const QByteArray&,int = 16 ) ;
+
+				static QByteArray processingText() ;
+				void reset() ;
+				const QByteArray& text() ;
+				const QByteArray& text( const QByteArray& ) ;
+			private:
+				int m_maxCounter = 16 ;
+				int m_counter = 0 ;
+				QByteArray m_counterDots ;
+				QByteArray m_txt ;
+				QByteArray m_processingDefaultText ;
+			};
+
+			class postProcessing
+			{
+			public:
+				static QByteArray processingText() ;
+				postProcessing() ;
+				postProcessing( const QByteArray& ) ;
+
+				const QByteArray& text( const QByteArray& ) ;
+			private:
+				int m_counter = 0 ;
+				QByteArray m_counterDots ;
+				QByteArray m_txt ;
+				QByteArray m_processingDefaultText ;
+			};
+
+			class filter
+			{
+			public:
+				filter( const engines::engine& engine,int ) ;
+				virtual const QByteArray& operator()( const Logger::Data& e ) ;
+				virtual ~filter() ;
+				const engines::engine& engine() const ;
+			private:
+				engines::engine::functions::preProcessing m_processing ;
+				const engines::engine& m_engine ;
+				QByteArray m_tmp ;
+				int m_processId ;
+			} ;
+
+			class DataFilter
+			{
+			public:
+				template< typename Type,typename ... Args >
+				DataFilter( Type,Args&& ... args ) :
+					m_filter( std::make_unique< typename Type::type >( std::forward< Args >( args ) ... ) )
+				{
+				}
+				const QByteArray& operator()( const Logger::Data& e )
+				{
+					return ( *m_filter )( e ) ;
+				}
+				DataFilter move()
+				{
+					return std::move( *this ) ;
+				}
+			private:
+				std::unique_ptr< engines::engine::functions::filter > m_filter ;
+			};
+
+			class filterOutPut
+			{
+			public:
+				struct args
+				{
+					const Logger::locale& locale ;
+					Logger::Data& data ;
+					const QByteArray& outPut ;
+				} ;
+				class meetCondition
+				{
+				public:
+					meetCondition( bool( *m )( const engines::engine&,const QByteArray& ),
+						       const engines::engine& engine ) :
+						m_function( m ),m_engine( engine )
+					{
+					}
+					bool operator()( const QByteArray& e ) const
+					{
+						return m_function( m_engine,e ) ;
+					}
+				private:
+					bool( *m_function )( const engines::engine&,const QByteArray& ) ;
+					const engines::engine& m_engine ;
+				} ;
+				class result
+				{
+				public:
+					result( const QByteArray& p,
+						const engines::engine& e,
+						bool( *m )( const engines::engine&,const QByteArray& ) ) :
+						m_progress( p ),m_meetCondition( m,e )
+						{
+						}
+					const QByteArray& progress()
+					{
+						return m_progress ;
+					}
+					const filterOutPut::meetCondition& meetCondition()
+					{
+						return m_meetCondition ;
+					}
+				private:
+					const QByteArray& m_progress ;
+					filterOutPut::meetCondition m_meetCondition ;
+				} ;
+				virtual result formatOutput( const filterOutPut::args& ) const = 0 ;
+				virtual bool meetCondition( const filterOutPut::args& ) const = 0 ;
+				virtual const engines::engine& engine() const = 0 ;
+				virtual ~filterOutPut() ;
+			} ;
+
+			static bool meetCondition( const engines::engine&,const QByteArray& ) ;
+
+			class FilterOutPut
+			{
+			public:
+				template< typename Type,typename ... Args >
+				FilterOutPut( Type,const engines::engine& engine,Args&& ... args ) :
+					m_filterOutPut( std::make_unique< typename Type::type >( engine,std::forward< Args >( args ) ... ) )
+				{
+				}
+				engines::engine::functions::filterOutPut::result
+				formatOutput( const Logger::locale& l,Logger::Data& d,const QByteArray& e ) const
+				{
+					return m_filterOutPut->formatOutput( { l,d,e } ) ;
+				}
+				bool meetCondition( const Logger::locale& l,Logger::Data& d,const QByteArray& e ) const
+				{
+					return m_filterOutPut->meetCondition( { l,d,e } ) ;
+				}
+			private:
+				std::unique_ptr< engines::engine::functions::filterOutPut > m_filterOutPut ;
+			};
+
+			virtual FilterOutPut filterOutput() ;
+
+			virtual ~functions() ;
+
+			virtual const QProcessEnvironment& processEnvironment() const ;
+
+			class mediaInfo
+			{
+			public:
+				mediaInfo( const QStringList& u,
+					   const QString& i,
+					   const QString& e,
+					   const QString& r,
+					   const QString& f,
+					   const QString& ff,
+					   const QString& n ) :
+					m_url( u ),
+					m_id( i ),
+					m_extension( e ),
+					m_resolution( r ),
+					m_fileSize( f ),
+					m_fileSizeRaw( ff ),
+					m_info( n )
+				{
+				}
+				mediaInfo( const QString& i,
+					   const QString& e,
+					   const QString& r,
+					   const QString& f,
+					   const QString& ff,
+					   const QString& n ) :
+					m_id( i ),
+					m_extension( e ),
+					m_resolution( r ),
+					m_fileSize( f ),
+					m_fileSizeRaw( ff ),
+					m_info( n )
+				{
+				}
+				QJsonObject toqJsonObject() const
+				{
+					QJsonObject obj ;
+
+					QJsonArray arr ;
+
+					for( const auto& it : m_url ){
+
+						arr.append( it ) ;
+					}
+
+					obj.insert( "urls",arr ) ;
+					obj.insert( "id",m_id ) ;
+					obj.insert( "extension",m_extension ) ;
+					obj.insert( "resolution",m_resolution ) ;
+					obj.insert( "filesize",m_fileSize ) ;
+					obj.insert( "filesizeRaw",m_fileSizeRaw ) ;
+					obj.insert( "info",m_info ) ;
+
+					return obj ;
+				}
+				static QString fileSizeRaw( const QJsonObject& obj )
+				{
+					return obj.value( "filesizeRaw" ).toString() ;
+				}
+				static QString id( const QJsonObject& obj )
+				{
+					return obj.value( "id" ).toString() ;
+				}
+				template< typename Function >
+				static void fromQJobject( const QJsonObject& obj,const Function& function )
+				{
+					auto a = obj.value( "id" ).toString() ;
+					auto b = obj.value( "extension" ).toString() ;
+					auto c = obj.value( "resolution" ).toString() ;
+					auto d = obj.value( "filesize" ).toString() ;
+					auto e = obj.value( "info" ).toString() ;
+
+					function( a,b,c,d,e ) ;
+				}
+				const QString& id() const
+				{
+					return m_id ;
+				}
+				const QString& ext() const
+				{
+					return m_extension ;
+				}
+				const QString& resolution() const
+				{
+					return m_resolution ;
+				}
+				const QString& fileSize() const
+				{
+					return m_fileSize ;
+				}
+				const QString& fileSizeRaw() const
+				{
+					return m_fileSizeRaw ;
+				}
+				const QString& info() const
+				{
+					return m_info ;
+				}
+				mediaInfo move()
+				{
+					return std::move( *this ) ;
+				}
+			private:
+				QStringList m_url ;
+				QString m_id ;
+				QString m_extension ;
+				QString m_resolution ;
+				QString m_fileSize ;
+				QString m_fileSizeRaw ;
+				QString m_info ;
+			} ;
+
+			virtual engines::metadata parseJsonDataFromGitHub( const QJsonDocument& ) ;
+
+			virtual std::vector< engines::engine::functions::mediaInfo > mediaProperties( Logger&,const QByteArray& ) ;
+
+			virtual std::vector< engines::engine::functions::mediaInfo > mediaProperties( Logger&,const QJsonArray& ) ;
+
+			virtual void updateOutPutChannel( QProcess::ProcessChannel& ) const ;
+
+			virtual bool breakShowListIfContains( const QStringList& ) ;
+
+			virtual bool supportsShowingComments() ;
+
+			virtual bool updateVersionInfo() ;
+
+			virtual void setTextEncondig( const QString&,QStringList& opts ) ;
+
+			virtual QString updateCmdPath( const QString& ) ;
+
+			virtual engines::engine::functions::DataFilter Filter( int ) ;
+
+			virtual QString deleteEngineBinFolder( const QString& ) ;
+
+			virtual void runCommandOnDownloadedFile( const QString&,const QString& ) ;
+
+			virtual QString commandString( const engines::engine::exeArgs::cmd& ) ;
+
+			virtual QStringList horizontalHeaderLabels() const ;
+
+			virtual void updateEnginePaths( const Context&,QString& filePath,QString& exeBinPath,QString& exeFolderPath ) ;
+
+			virtual bool likeYtdlp() ;
+
+			virtual void updateLocalOptions( QStringList& ) ;
+
+			virtual void setProxySetting( QStringList&,const QString& ) ;
+
+			virtual QString setCredentials( QStringList&,QStringList & ) ;
+
+			virtual util::Json parsePlayListData( const QByteArray& ) ;
+
+			struct onlineVersion
+			{
+				QString stringVersion ;
+				util::version version ;
+				onlineVersion move()
+				{
+					return std::move( *this ) ;
+				}
+			};
+
+			virtual engines::engine::functions::onlineVersion versionInfoFromGithub( const QByteArray& ) ;
+
+			virtual bool foundNetworkUrl( const QString& ) ;
+
+			virtual void renameArchiveFolder( const QString& ) ;
+
+			QString updateTextOnCompleteDownlod( const QString& uiText,
+							     const QString& downloadingOptions,
+							     const engine::engine::functions::finishedState& ) ;
+
+			virtual QString updateTextOnCompleteDownlod( const QString& uiText,
+								     const QString& bkText,
+								     const QString& downloadingOptions,
+								     const engine::engine::functions::finishedState& ) ;
+
+			virtual void sendCredentials( const QString&,QProcess& ) ;
+
+			virtual void processData( Logger::Data&,const QByteArray&,int id,bool readableJson ) ;
+
+			virtual void processData( Logger::Data&,const QString&,int id,bool readableJson ) ;
+
+			struct updateOpts
+			{
+				template< typename Args,typename Ent >
+				updateOpts( const Args& args,
+					    const Ent& ent,
+					    const utility::uiIndex& ui,
+					    QStringList& u,
+					    QStringList& o ) :
+					uiOptions( args.uiDownloadOptions() ),
+					userOptions( args.otherOptions() ),
+					uiIndex( ui ),
+					credentials( args.credentials() ),
+					playlist( ent.playlist ),
+					playlist_count( ent.playlist_count ),
+					playlist_id( ent.playlist_id ),
+					playlist_title( ent.playlist_title ),
+					playlist_uploader( ent.playlist_uploader ),
+					playlist_uploader_id( ent.playlist_uploader_id ),
+					n_entries( ent.n_entries ),
+					urls( u ),
+					ourOptions( o )
+				{
+				}
+				const QStringList& uiOptions ;
+				const QStringList& userOptions ;
+				const utility::uiIndex& uiIndex ;
+				const QString& credentials ;
+				const QString& playlist ;
+				const QString& playlist_count ;
+				const QString& playlist_id ;
+				const QString& playlist_title ;
+				const QString& playlist_uploader ;
+				const QString& playlist_uploader_id ;
+				const QString& n_entries ;
+				QStringList& urls ;
+				QStringList& ourOptions ;
+			};
+
+			virtual void updateDownLoadCmdOptions( const engines::engine::functions::updateOpts&,bool ) ;
+
+			virtual void updateGetPlaylistCmdOptions( QStringList& ) ;
+
+			virtual void updateCmdOptions( QStringList& ) ;
+
+			functions( settings&,const engines::engine&,const QProcessEnvironment& e ) ;
+			settings& Settings() const ;
+			const engines::engine& engine() const ;
+		private:
+			settings& m_settings ;
+			const engines::engine& m_engine ;
+			const QProcessEnvironment& m_processEnvironment ;
+		} ;
+
+		engine( Logger& l ) ;
+
+		engine( const engines& engines,
+			Logger& logger,
+			const QString& name,
+			const QString& versionArgument,
+			int line,
+			int position,
+			int id ) ;
+
+		engine( Logger& logger,
+			const enginePaths& ePaths,
+			const util::Json& json,
+			const engines& engines,
+			int id ) ;
+
+		static QString mediaAlreadInArchiveText()
+		{
+			return QObject::tr( "Media Already In Archive" ) ;
+		}
+
+		const QString& name() const
+		{
+			return m_name ;
+		}
+
+		bool forTesting() const
+		{
+			return this->name().endsWith( "-test" ) ;
+		}
+		void updateLocalOptions( QStringList& opts ) const
+		{
+			m_engine->updateLocalOptions( opts ) ;
+		}
+
+		template< typename Context,typename Function >
+		class uvic
+		{
+		public:
+			uvic( const engines::engine& engine,
+			      const Context& ctx,
+			      Function function ) :
+				m_engine( engine ),
+				m_ctx( ctx ),
+				m_function( std::move( function ) )
+			{
+			}
+			void operator()( const utils::qprocess::outPut& e )
+			{
+				if( e.success() ){
+
+					m_engine.setVersionString( e.stdOut ) ;
+				}
+
+				m_ctx.TabManager().enableAll() ;
+
+				m_function() ;
+			}
+			uvic< Context,Function > move()
+			{
+				return std::move( *this ) ;
+			}
+		private:
+			const engines::engine& m_engine ;
+			const Context& m_ctx ;
+			Function m_function ;
+		} ;
+
+		template< typename Context,typename Function >
+		void updateVersionInfo( const Context& ctx,Function ff ) const
+		{
+			if( m_engine->updateVersionInfo() ){
+
+				const auto& engine = *this ;
+
+				if( engine.versionInfo().valid() ){
+
+					ff() ;
+				}else{
+					ctx.TabManager().disableAll() ;
+
+					const auto& exe = engine.exePath() ;
+					QStringList args{ engine.versionArgument() } ;
+
+					engines::engine::exeArgs::cmd cmd( exe,args ) ;
+
+					this->setPermissions( cmd.exe() ) ;
+
+					uvic< Context,Function > meaw( engine,ctx,std::move( ff ) ) ;
+
+					auto m = QProcess::SeparateChannels ;
+
+					utils::qprocess::run( cmd.exe(),cmd.args(),m,meaw.move() ) ;
+				}
+			}else{
+				ff() ;
+			}
+		}
+
+		template< typename backend,typename ... Args >
+		void setBackend( const engines& engines,Args&& ... args )
+		{
+			m_engine = std::make_unique< backend >( engines,
+								*this,
+								m_jsonObject,
+								std::forward< Args >( args ) ... ) ;
+
+			this->updateOptions() ;
+		}
+
+		QString updateCmdPath( Logger&,const QString& e ) const ;
+
+		const QString& commandName() const ;
+
+		bool breakShowListIfContains( const QStringList& e ) const ;
+
+		const QString& versionArgument() const
+		{
+			return m_versionArgument ;
+		}
+
+		QString setVersionString( const QString& data ) const ;
+		QString versionString( const QString& data ) const ;
+
+		const util::version& versionInfo() const
+		{
+			return m_version ;
+		}
+		const QString& optionsArgument() const
+		{
+			return m_optionsArgument ;
+		}
+		const QString& downloadUrl() const
+		{
+			return m_downloadUrl ;
+		}
+		bool validDownloadUrl() const
+		{
+			return m_downloadUrl.startsWith( "https://api.github.com" ) ;
+		}		
+		void setTextEncondig( QStringList& opts ) const
+		{
+			m_engine->setTextEncondig( m_encodingArgument,opts ) ;
+		}
+		const QProcessEnvironment& processEnvironment() const
+		{
+			return m_engine->processEnvironment() ;
+		}
+		void processData( Logger::Data& outPut,const QByteArray& data,int id,bool readableJson ) const
+		{
+			m_engine->processData( outPut,data,id,readableJson ) ;
+		}
+		void processData( Logger::Data& outPut,const QString& data,int id,bool readableJson ) const
+		{
+			m_engine->processData( outPut,data,id,readableJson ) ;
+		}
+		void renameArchiveFolder( const QString& e ) const
+		{
+			return m_engine->renameArchiveFolder( e ) ;
+		}
+		QString commandString( const engines::engine::exeArgs::cmd& cmd ) const
+		{
+			return m_engine->commandString( cmd ) ;
+		}
+		void runCommandOnDownloadedFile( const QString& e,const QString& s ) const
+		{
+			m_engine->runCommandOnDownloadedFile( e,s ) ;
+		}
+		const QStringList& defaultDownLoadCmdOptions() const
+		{
+			return m_defaultDownLoadCmdOptions ;
+		}
+		QString setCredentials( QStringList& e,QStringList& s ) const
+		{
+			return m_engine->setCredentials( e,s ) ;
+		}
+		enum class tab{ basic,batch,playlist } ;
+		QStringList dumpJsonArguments( engines::engine::tab ) const ;
+
+		engines::engine::functions::DataFilter filter( int processId ) const
+		{
+			return m_engine->Filter( processId ) ;
+		}
+		QString updateTextOnCompleteDownlod( const QString& uiText,
+						     const QString& bkText,
+						     const QString& dopts,
+						     const engine::engine::functions::finishedState& f ) const
+		{
+			return m_engine->updateTextOnCompleteDownlod( uiText,bkText,dopts,f ) ;
+		}
+		void updateDownLoadCmdOptions( const engines::engine::functions::updateOpts& u,bool e ) const
+		{
+			m_engine->updateDownLoadCmdOptions( u,e ) ;
+		}
+		void sendCredentials( const QString& credentials,QProcess& exe ) const
+		{
+			m_engine->sendCredentials( credentials,exe ) ;
+		}
+		std::vector< engines::engine::functions::mediaInfo > mediaProperties( Logger& l,const QByteArray& e ) const
+		{
+			return m_engine->mediaProperties( l,e ) ;
+		}
+		void updateGetPlaylistCmdOptions( QStringList& e ) const
+		{
+			m_engine->updateGetPlaylistCmdOptions( e ) ;
+		}
+		void updateCmdOptions( QStringList& e ) const
+		{
+			m_engine->updateCmdOptions( e ) ;
+		}
+		util::Json parsePlayListData( const QByteArray& e ) const
+		{
+			return m_engine->parsePlayListData( e ) ;
+		}
+		bool archiveContainsFolder() const
+		{
+			return m_archiveContainsFolder ;
+		}
+		QString deleteEngineBinFolder( const QString& e ) const
+		{
+			return m_engine->deleteEngineBinFolder( e ) ;
+		}
+		engines::metadata parseJsonDataFromGitHub( const QJsonDocument& e ) const
+		{
+			return m_engine->parseJsonDataFromGitHub( e ) ;
+		}
+		engines::engine::functions::FilterOutPut filterOutput() const
+		{
+			return m_engine->filterOutput() ;
+		}
+		bool foundNetworkUrl( const QString& s ) const
+		{
+			return m_engine->foundNetworkUrl( s ) ;
+		}
+		engines::engine::functions::onlineVersion versionInfoFromGithub( const QByteArray& e ) const
+		{
+			return m_engine->versionInfoFromGithub( e ) ;
+		}
+		void setProxySetting( QStringList& e,const QString& s ) const
+		{
+			m_engine->setProxySetting( e,s ) ;
+		}
+		QStringList horizontalHeaderLabels() const
+		{
+			return m_engine->horizontalHeaderLabels() ;
+		}
+		void updateOutPutChannel( QProcess::ProcessChannel& s ) const
+		{
+			m_engine->updateOutPutChannel( s ) ;
+		}
+		std::vector< engines::engine::functions::mediaInfo > mediaProperties( Logger& l,const QJsonArray& e ) const
+		{
+			return m_engine->mediaProperties( l,e ) ;
+		}
+		void updateEnginePaths( const Context& ctx,QString& filePath,QString& exeBinPath,QString& exeFolderPath ) const
+		{
+			m_engine->updateEnginePaths( ctx,filePath,exeBinPath,exeFolderPath ) ;
+		}
+		const QStringList& defaultListCmdOptions() const
+		{
+			return m_defaultListCmdOptions ;
+		}
+		const QStringList& defaultCommentsCmdOptions() const
+		{
+			return m_defaultCommentsCmdOptions ;
+		}
+		const QStringList& defaultSubstitlesCmdOptions() const
+		{
+			return m_defaultSubstitlesCmdOptions ;
+		}
+		const QStringList& defaultSubtitleDownloadOptions() const
+		{
+			return m_defaultSubtitleDownloadOptions ;
+		}
+		const QStringList& skiptLineWithText() const
+		{
+			return m_skiptLineWithText ;
+		}
+		const QStringList& removeText() const
+		{
+			return m_removeText ;
+		}
+		const QStringList& splitLinesBy() const
+		{
+			return m_splitLinesBy ;
+		}
+		const exeArgs& exePath() const
+		{
+			return m_exePath ;
+		}
+		const QString& batchFileArgument() const
+		{
+			return m_batchFileArgument ;
+		}
+		const QString& exeFolderPath() const
+		{
+			return m_exeFolderPath ;
+		}
+		const QString& userName() const
+		{
+		        return m_userName ;
+		}
+		const QString& password() const
+		{
+		        return m_password ;
+		}		
+		const QString& playListUrlPrefix() const
+		{
+			return m_playListUrlPrefix ;
+		}
+		const QString& playlistItemsArgument() const
+		{
+			return m_playlistItemsArgument ;
+		}
+		const QString& cookieArgument() const
+		{
+			return m_cookieArgument ;
+		}
+		const QJsonObject& controlStructure() const
+		{
+			return m_controlStructure ;
+		}
+		bool canDownloadMediaPart() const
+		{
+			return this->name().contains( "yt-dlp" ) ;
+		}
+		bool valid() const
+		{
+			return m_valid ;
+		}
+		bool supportShowingComments() const
+		{
+			return m_engine->supportsShowingComments() ;
+		}
+		bool canDownloadPlaylist() const
+		{
+			return m_canDownloadPlaylist ;
+		}
+		bool likeYoutubeDl() const
+		{
+			return m_likeYoutubeDl ;
+		}
+		bool backendExists() const
+		{
+			QFileInfo m( m_exePath.realExe() ) ;
+			return m.exists() && m.isFile() ;
+		}
+		bool mainEngine() const
+		{
+			return m_mainEngine ;
+		}
+		bool replaceOutputWithProgressReport() const
+		{
+			return m_replaceOutputWithProgressReport ;
+		}
+		void setBroken() const
+		{
+			m_broken = true ;
+		}
+		bool broken() const
+		{
+			return m_broken ;
+		}
 	private:
-		const BaseOptions m_Options ;
-		const QProcessEnvironment m_processEnvironment ;
-		const engines::exeFullPath m_exeFullPath ;
-		const engines::version m_version ;
-		static engines::exeFullPath m_exeJavaFullPath ;
-		static engines::exeFullPath m_exeFuserMount ;
-	} ;
+		void setPermissions( const QString& ) const ;
 
-	engines() ;
-	static const engines& instance() ;
-	bool atLeastOneDealsWithFiles() const ;
-	volumeInfo::List mountInfo( const volumeInfo::List& ) const ;
-	QStringList enginesWithNoConfigFile() const ;
-	QStringList enginesWithConfigFile() const ;
-	void aboutToExit() const ;
-	const std::vector< engines::engine::Wrapper >& supportedEngines() const ;
+		void updateOptions() ;
 
-	class engineWithPaths{
+		void parseMultipleCmdArgs( Logger& logger,const engines& engines,const enginePaths&,int ) ;
+
+		void parseMultipleCmdArgs( QStringList&,
+					   const QString&,
+					   Logger& logger,
+					   const enginePaths& ePaths,
+					   const engines& engines,
+					   int ) ;
+
+		mutable util::version m_version ;
+		QJsonObject m_jsonObject ;
+		std::unique_ptr< engines::engine::functions > m_engine ;
+		int m_line ;
+		int m_position ;
+		bool m_valid ;
+		bool m_canDownloadPlaylist ;
+		bool m_likeYoutubeDl ;
+		bool m_mainEngine ;
+		bool m_archiveContainsFolder = false ;
+		bool m_replaceOutputWithProgressReport ;
+		mutable bool m_broken = false ;
+		QString m_versionArgument ;
+		QString m_name ;
+		QString m_commandName ;
+		QString m_userName ;
+		QString m_password ;
+		QString m_exeFolderPath ;
+		QString m_optionsArgument ;
+		QString m_downloadUrl ;
+		QString m_playListUrlPrefix ;
+		QString m_playlistItemsArgument ;
+		QString m_batchFileArgument ;
+		QString m_cookieArgument ;
+		QString m_encodingArgument ;
+		QStringList m_dumpJsonArguments ;
+		QStringList m_splitLinesBy ;
+		QStringList m_removeText ;
+		QStringList m_skiptLineWithText ;
+		QStringList m_defaultDownLoadCmdOptions ;
+		QStringList m_defaultListCmdOptions ;
+		QStringList m_defaultCommentsCmdOptions ;
+		QStringList m_defaultSubstitlesCmdOptions ;
+		QStringList m_defaultSubtitleDownloadOptions ;
+
+		QJsonObject m_controlStructure ;
+
+		mutable engines::engine::exeArgs m_exePath ;
+	};
+	settings& Settings() const;
+	QString findExecutable( const QString& exeName ) const ;
+	const QProcessEnvironment& processEnvironment() const ;
+	QString addEngine( const QByteArray& data,const QString& path,int ) ;
+	void removeEngine( const QString& name,int ) ;
+	QStringList enginesList() const ;
+	const engine& defaultEngine( const QString&,int ) const ;
+	util::result_ref< const engines::engine& > getEngineByName( const QString& name ) const ;
+	const enginePaths& engineDirPaths() const ;
+	engines( Logger&,const engines::enginePaths&,settings&,int ) ;
+	void openUrls( tableWidget&,int row ) const ;
+	void openUrls( tableWidget&,int row,const engines::engine& ) const ;
+	void openUrls( const QString& path ) const ;
+	const QString& defaultEngineName() const ;
+	class Iterator
+	{
 	public:
-	        engineWithPaths() ;
-		engineWithPaths( const QString& engine ) ;
-		engineWithPaths( const QString& cipherPath,const QString& configFilePath ) ;
-		engineWithPaths( const engines::engine&,engines::engine::ownsCipherFolder ) ;
-		engineWithPaths( const engines::engine& e,
-		                 const QString& cipherPath,
-		                 const QString& configFilePath ) ;
-		const engines::engine& get() const
+		Iterator( const std::vector< engines::engine >& engines,int id ) :
+			m_maxCounter( engines.size() ),
+			m_engines( &engines ),
+			m_id( id )
 		{
-		        return m_engine.get() ;
 		}
-		const engines::engine * operator->() const
+		Iterator( const engines::engine& engine,int id ) :
+			m_maxCounter( 1 ),
+			m_engine( &engine ),
+			m_id( id )
 		{
-		        return m_engine.operator->() ;
 		}
-		const QString& configFilePath() const
+		size_t size() const
 		{
-		        return m_configPath ;
+			return m_maxCounter ;
 		}
-		const QString& cipherFolder() const
+		bool hasNext() const
 		{
-		        return m_cipherPath ;
+			return m_counter + 1 < m_maxCounter ;
+		}
+		engines::Iterator next() const
+		{
+			auto m = *this ;
+			m.m_counter++ ;
+			return m ;
+		}
+		const engines::engine& engine() const
+		{
+			if( m_engine ){
+
+				return *m_engine ;
+			}else{
+				return ( *m_engines )[ m_counter ] ;
+			}
+		}
+		int id() const
+		{
+			return m_id ;
+		}
+		Iterator move()
+		{
+			return std::move( *this ) ;
 		}
 	private:
-		engines::engine::Wrapper m_engine ;
-		QString m_cipherPath ;
-		QString m_configPath ;
+		size_t m_counter = 0 ;
+		size_t m_maxCounter ;
+		const engines::engine * m_engine = nullptr ;
+		const std::vector< engines::engine > * m_engines = nullptr ;
+		int m_id ;
 	} ;
 
-	engines::engineWithPaths getByPaths( const QString& cipherPath,
-	                                     const QString& configPath = QString() ) const ;
-	const engine& getUnKnown() const ;
-	const engine& getByName( const QString& e ) const ;
-	const engine& getByFsName( const QString& e ) const ;
+	const std::vector< engine >& getEngines() const ;
+	engines::Iterator getEnginesIterator() const ;
+	void setDefaultEngine( const QString& ) ;
+	void showBanner() ;
+	class proxySettings
+	{
+	public:
+		proxySettings()
+		{
+		}
+		proxySettings( const QByteArray& e ) :
+			m_networkProxyString( e ),
+			m_networkProxy( this->toQNetworkProxy( m_networkProxyString ) )
+		{
+		}
+		proxySettings( const QString& e ) :
+			m_networkProxyString( e ),
+			m_networkProxy( this->toQNetworkProxy( m_networkProxyString ) )
+		{
+			this->setDefaultProxy() ;
+		}
+		proxySettings( const QNetworkProxy& e ) :
+			m_networkProxyString( this->toString( e ) ),
+			m_networkProxy( e )
+		{
+			this->setDefaultProxy() ;
+		}
+		const QString& networkProxyString() const
+		{
+			return m_networkProxyString ;
+		}
+		const QNetworkProxy& networkProxy() const
+		{
+			return m_networkProxy ;
+		}
+		bool isSet() const
+		{
+			return !m_networkProxyString.isEmpty() ;
+		}
+		proxySettings move()
+		{
+			return std::move( *this ) ;
+		}
+		bool operator!=( const proxySettings &other ) const ;
+		QNetworkProxy toQNetworkProxy( const QString& e ) const ;
+		void setApplicationProxy( const QString& ) const ;
+		void setDefaultProxy() const ;
+	private:
+		QString toString( const QNetworkProxy& ) const ;
+		QString m_networkProxyString ;
+		mutable QString m_currentProxyString ;
+		QNetworkProxy m_networkProxy ;
+	};
+	const engines::proxySettings& networkProxy() const
+	{
+		return m_networkProxy ;
+	}
+	void setNetworkProxy( engines::proxySettings,bool ) ;
 private:
-	std::vector< std::unique_ptr< engines::engine > > m_backends ;
-	std::vector< engines::engine::Wrapper > m_backendWrappers ;
+	void updateEngines( bool,int ) ;
+	Logger& m_logger ;
+	settings& m_settings ;
+	std::vector< engine > m_backends ;
+	const engines::enginePaths& m_enginePaths ;
+	QProcessEnvironment m_processEnvironment ;
+	engines::proxySettings m_networkProxy ;
+	int m_bannerId ;
+	class configDefaultEngine
+	{
+	public:
+		configDefaultEngine( Logger& logger,const enginePaths& enginePath ) ;
+
+		const QString& name() const
+		{
+			return m_name ;
+		}
+		const QString& configFileName() const
+		{
+			return m_configFileName ;
+		}
+	private:
+		QString m_name ;
+		QString m_configFileName ;
+	} ;
+
+	engines::configDefaultEngine m_defaultEngine ;
 };
 
 #endif

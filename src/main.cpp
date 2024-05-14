@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2012-2015
+ *  Copyright (c) 2021
  *  name : Francis Banyikwa
  *  email: mhogomchungu@gmail.com
  *  This program is free software: you can redistribute it and/or modify
@@ -17,21 +17,108 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "sirikali.h"
+#include "mainwindow.h"
+#include "settings.h"
+#include "translator.h"
+#include "utility"
+#include "utils/single_instance.hpp"
+#include "engines/tests.h"
 
-int main( int argc,char * argv[] )
+class myApp
 {
-	QStringList args ;
-
-	for( int i = 0 ; i < argc ; i++ ){
-
-		args.append( argv[ i ] ) ;
+public:
+	struct args
+	{
+		QApplication& app ;
+		settings& Settings ;
+		const engines::enginePaths& ePaths ;
+		const utility::cliArguments& cargs ;
+	};
+	myApp( const myApp::args& args ) :
+		m_traslator( args.Settings,args.app ),
+		m_app( args.app,args.Settings,m_traslator,args.ePaths,args.cargs )
+	{
 	}
+	void start( const QByteArray& e )
+	{
+		m_app.Show() ;
+		m_app.processEvent( e ) ;
+	}
+	void exit()
+	{
+		m_app.quitApp() ;
+	}
+	void hasEvent( const QByteArray& e )
+	{
+		m_app.processEvent( e ) ;
+	}
+private:
+	translator m_traslator ;
+	MainWindow m_app ;
+};
 
-	if( utility::printVersionOrHelpInfo( args ) ){
+int start( int argc,char * argv[],
+	   const utility::cliArguments& cargs,
+	   engines::enginePaths& paths,
+	   settings& settings )
+{
+	QApplication mqApp( argc,argv ) ;
+
+	settings.setTheme( mqApp,paths.themePath() ) ;
+
+	const auto& args = cargs.arguments() ;
+
+	if( tests::test_engine( args,mqApp ) ){
 
 		return 0 ;
 	}else{
-		return sirikali::run( args,argc,argv ) ;
+		auto spath = paths.socketPath() ;
+
+		QJsonObject jsonArgs ;
+
+		jsonArgs.insert( "-a",cargs.contains( "-a" ) ) ;
+
+		jsonArgs.insert( "-e",cargs.contains( "-e" ) ) ;
+
+		jsonArgs.insert( "-u",cargs.value( "-u" ) ) ;
+
+		jsonArgs.insert( "--proxy",cargs.value( "--proxy" ) ) ;
+
+		auto json = QJsonDocument( jsonArgs ).toJson( QJsonDocument::Indented ) ;
+
+		myApp::args args{ mqApp,settings,paths,cargs } ;
+
+		utils::app::appInfo< myApp,myApp::args > m( args,spath,mqApp,json ) ;
+
+		if( cargs.contains( "-s" ) || !settings.singleInstance() ){
+
+			return utils::app::runMultiInstances( std::move( m ) ) ;
+		}else{
+			return utils::app::runOneInstance( std::move( m ) ) ;
+		}
+	}
+}
+
+int main( int argc,char * argv[] )
+{
+	utility::cliArguments cargs( argc,argv ) ;
+
+	if( utility::onlyWantedVersionInfo( cargs ) ){
+
+		return 0 ;
+	}else{
+		settings settings( cargs ) ;
+
+		engines::enginePaths paths( settings ) ;
+
+		if( utility::platformIsWindows() ){
+
+			if( utility::startedUpdatedVersion( settings,cargs ) ){
+
+				return 0 ;
+			}
+		}
+
+		return start( argc,argv,cargs,paths,settings ) ;
 	}
 }

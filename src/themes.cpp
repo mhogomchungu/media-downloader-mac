@@ -62,12 +62,12 @@ QStringList themes::typesTranslated() const
 	return m ;
 }
 
-const QString & themes::translatedAt( int s ) const
+const QString& themes::translatedAt( int s ) const
 {
 	return m_strings[ static_cast< size_t >( s ) ].translated ;
 }
 
-const QString & themes::unTranslatedAt( int s ) const
+const QString& themes::unTranslatedAt( int s ) const
 {
 	return m_strings[ static_cast< size_t >( s ) ].untranslated ;
 }
@@ -115,6 +115,11 @@ void themes::setComboBox( QComboBox& cb,const QString& dm ) const
 QString themes::defaultthemeFullPath() const
 {
 	return m_themePath + "/" + m_defaultDarkTheme + ".json" ;
+}
+
+QString themes::defaultPureDarkthemeFullPath() const
+{
+	return m_themePath + "/Pure Dark.json" ;
 }
 
 QString themes::themeFullPath() const
@@ -165,28 +170,9 @@ void themes::setTheme( QApplication& app,const QJsonObject& obj ) const
 	}
 }
 
-QJsonObject themes::defaultTheme() const
+static QJsonObject _baseTheme()
 {
 	QJsonObject obj ;
-
-	obj.insert( "darkColor",[](){
-
-		QJsonObject obj ;
-
-		obj.insert( "rgba",[](){
-
-			QJsonArray arr ;
-
-			arr.append( 45 ) ;
-			arr.append( 45 ) ;
-			arr.append( 45 ) ;
-			arr.append( 255 ) ;
-
-			return arr ;
-		}() ) ;
-
-		return obj ;
-	}() ) ;
 
 	obj.insert( "disabledColor",[](){
 
@@ -386,13 +372,66 @@ QJsonObject themes::defaultTheme() const
 	return obj ;
 }
 
-void themes::setUpTheme( QApplication& app,const QString& themeBasePath )
+QJsonObject themes::defaultTheme() const
 {
-	themes ths( themes::defaultDarkThemeName(),themeBasePath ) ;
+	auto obj = _baseTheme() ;
 
-	QDir().mkpath( themeBasePath ) ;
+	obj.insert( "darkColor",[](){
 
-	auto defaultThemePath = ths.defaultthemeFullPath() ;
+		QJsonObject obj ;
+
+		obj.insert( "rgba",[](){
+
+			QJsonArray arr ;
+
+			arr.append( 45 ) ;
+			arr.append( 45 ) ;
+			arr.append( 45 ) ;
+			arr.append( 255 ) ;
+
+			return arr ;
+		}() ) ;
+
+		return obj ;
+	}() ) ;
+
+	return obj ;
+}
+
+QJsonObject themes::defaultPureDarkTheme() const
+{
+	auto obj = _baseTheme() ;
+
+	obj.insert( "darkColor",[](){
+
+		QJsonObject obj ;
+
+		obj.insert( "rgba",[](){
+
+			QJsonArray arr ;
+
+			arr.append( 0 ) ;
+			arr.append( 0 ) ;
+			arr.append( 0 ) ;
+			arr.append( 0 ) ;
+
+			return arr ;
+		}() ) ;
+
+		return obj ;
+	}() ) ;
+
+	return obj ;
+}
+
+void themes::set( QApplication& app ) const
+{
+	if( !QFile::exists( m_themePath ) ){
+
+		QDir().mkpath( m_themePath ) ;
+	}
+
+	auto defaultThemePath = this->defaultthemeFullPath() ;
 
 	if( !QFile::exists( defaultThemePath ) ){
 
@@ -400,24 +439,43 @@ void themes::setUpTheme( QApplication& app,const QString& themeBasePath )
 
 		if( f.open( QIODevice::WriteOnly ) ){
 
-			f.write( QJsonDocument( ths.defaultTheme() ).toJson( QJsonDocument::Indented ) ) ;
+			QJsonDocument doc( this->defaultTheme() ) ;
+
+			f.write( doc.toJson( QJsonDocument::Indented ) ) ;
 		}
 	}
 
-	QFile f( ths.themeFullPath() ) ;
+	auto defaultPureDarkThemePath = this->defaultPureDarkthemeFullPath() ;
 
-	if( !f.open( QIODevice::ReadOnly ) ){
+	if( !QFile::exists( defaultPureDarkThemePath ) ){
 
-		ths.setDefaultTheme( app ) ;
-	}else{
-		auto obj = QJsonDocument::fromJson( f.readAll() ).object() ;
+		QFile f( defaultPureDarkThemePath ) ;
 
-		if( obj.isEmpty() ){
+		if( f.open( QIODevice::WriteOnly ) ){
 
-			return ths.setDefaultTheme( app ) ;
+			QJsonDocument doc( this->defaultPureDarkTheme() ) ;
+
+			f.write( doc.toJson( QJsonDocument::Indented ) ) ;
 		}
+	}
 
-		ths.setTheme( app,obj ) ;
+	if( this->usingThemes() ){
+
+		QFile f( this->themeFullPath() ) ;
+
+		if( !f.open( QIODevice::ReadOnly ) ){
+
+			this->setDefaultTheme( app ) ;
+		}else{
+			auto obj = QJsonDocument::fromJson( f.readAll() ).object() ;
+
+			if( obj.isEmpty() ){
+
+				this->setDefaultTheme( app ) ;
+			}else{
+				this->setTheme( app,obj ) ;
+			}
+		}
 	}
 }
 

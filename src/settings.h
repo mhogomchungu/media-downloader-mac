@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2018
+ *  Copyright (c) 2021
  *  name : Francis Banyikwa
  *  email: mhogomchungu@gmail.com
  *  This program is free software: you can redistribute it and/or modify
@@ -20,218 +20,317 @@
 #ifndef SETTINGS_H
 #define SETTINGS_H
 
-#include <QMenu>
-#include <QString>
-#include <QWidget>
-#include <QDialog>
 #include <QSettings>
-#include <QRect>
+#include <QString>
 #include <QStringList>
+#include <QByteArray>
+#include <QComboBox>
+#include <QPixmap>
 #include <QDir>
-#include <QtGlobal>
-#include <QTranslator>
+#include <QApplication>
 
-#include "lxqt_wallet.h"
-#include "favorites.h"
-#include "engines.h"
 #include <vector>
-#include <array>
-#include <functional>
+#include <memory>
 
-class settings{
-public:
-	class walletBackEnd
+#include <QStandardPaths>
+
+class Logger ;
+class QApplication ;
+
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QJsonDocument>
+
+namespace utility
+{
+	class cliArguments ;
+}
+class settings
+{
+public:	
+	class proxySettings
 	{
 	public:
-		walletBackEnd( LXQt::Wallet::BackEnd s ) : m_valid( true ),m_storage( s )
-		{
-		}
-		walletBackEnd() : m_valid( false )
-		{
-		}
-		bool operator==( LXQt::Wallet::BackEnd s ) const
-		{
-			return m_valid && m_storage == s ;
-		}
-		bool operator==( const settings::walletBackEnd& other ) const
-		{
-			if( this->m_valid && other.m_valid ){
+		enum class Type{ system,env,manual,none } ;
 
-				return this->m_storage == other.m_storage ;
-			}else{
-				return false ;
+		class type
+		{
+		public:
+			type( settings::proxySettings::Type s ) : m_type( s )
+			{
 			}
-		}
-		bool isValid() const
-		{
-			return m_valid ;
-		}
-		bool isInvalid() const
-		{
-			return !this->isValid() ;
-		}
-		LXQt::Wallet::BackEnd bk() const
-		{
-			return m_storage ;
-		}
-	private:
-		bool m_valid ;
-		LXQt::Wallet::BackEnd m_storage ;
-	};
-
-	class windowDimensions{
-	public:
-		static constexpr int size = 8 ;
-		windowDimensions( const QStringList& e ) ;
-		windowDimensions( const QString& e ) ;
-		windowDimensions( const std::array< int,size >& e ) ;
-		operator bool() ;
-		int columnWidthAt( std::array< int,size >::size_type ) const ;
-		QRect geometry() const ;
-		QString dimensions() const ;
-	private:
-		void setDimensions( const QStringList& ) ;
-		std::array< int,size > m_array ;
-		bool m_ok = false ;
-	};
-
-	class translator
-	{
-	public:
-		translator() ;
-		void setLanguage( const QByteArray& e ) ;
-		~translator() ;
-		const QString& UIName( const QString& name ) ;
-		const QString& name( const QString& UIName ) ;
-		QString translate( const QString& internalName ) ;
-		const char * UINameUnTranslated( const QString& name ) ;
-	private:
-		struct entry{
-			entry( const QString&,const char *,const QString& ) ;
-			QString UINameTranslated ;
-			const char * UINameUnTranslated ;
-			QString internalName ;
+			bool none() const
+			{
+				return m_type == settings::proxySettings::Type::none ;
+			}
+			bool system() const
+			{
+				return m_type == settings::proxySettings::Type::system ;
+			}
+			bool env() const
+			{
+				return m_type == settings::proxySettings::Type::env ;
+			}
+			bool manual() const
+			{
+				return m_type == settings::proxySettings::Type::manual ;
+			}
+		private:
+			settings::proxySettings::Type m_type ;
 		} ;
-		void clear( void ) ;
-		QTranslator * m_translator = nullptr ;
-		std::vector< entry > m_languages ;
+		proxySettings( QSettings& ) ;
+		proxySettings& setProxySettings( settings::proxySettings::Type,const QString& = {} ) ;
+		settings::proxySettings::type types() const ;
+		QByteArray proxyAddress() const ;
+	private:
+		QSettings& m_settings ;
 	} ;
 
-	static settings& instance()
+	settings::proxySettings getProxySettings() ;
+
+	enum class tabName{ basic,batch,playlist } ;
+
+	settings( const utility::cliArguments& ) ;
+
+	QSettings& bk() ;
+
+	size_t maxConcurrentDownloads() ;
+
+	const QString& windowsOnly3rdPartyBinPath() ;
+	const QString& windowsOnlyExeBinPath() ;
+	const QString& windowsOnlyDefaultPortableVersionDownloadFolder() ;
+
+	class mediaPlayer
 	{
-		static settings s ;
-		return s ;
+	public:
+		struct PlayerOpts
+		{
+			PlayerOpts( QString e,QString n ) :
+				exePath( std::move( e ) ),name( std::move( n ) )
+			{
+			}
+			QString exePath ;
+			QString name ;
+		} ;
+		class action
+		{
+		public:
+			action( const QString& url,
+				Logger& logger,
+				const settings::mediaPlayer::PlayerOpts& opts ) :
+				m_url( url ),m_playerOpts( opts ),m_logger( logger )
+			{
+			}
+			void operator()() const ;
+			void logError() const ;
+		private:
+			QString m_url ;
+			const settings::mediaPlayer::PlayerOpts& m_playerOpts ;
+			Logger& m_logger ;
+		} ;
+
+		mediaPlayer( const std::vector< settings::mediaPlayer::PlayerOpts >&,Logger& ) ;
+		const std::vector< settings::mediaPlayer::PlayerOpts >& opts() const
+		{
+			return m_playerOpts ;
+		}
+		bool valid() const
+		{
+			return !m_playerOpts.empty() ;
+		}
+		settings::mediaPlayer::action ac( const QString& url,
+						  const settings::mediaPlayer::PlayerOpts& opts ) const
+		{
+			return { url,m_logger,opts } ;
+		}
+	private:
+		const std::vector< settings::mediaPlayer::PlayerOpts >& m_playerOpts ;
+		Logger& m_logger ;
+	} ;
+
+	settings::mediaPlayer openWith( Logger& ) ;
+
+	QString downloadFolder() ;
+	QString libraryDownloadFolder() ;
+	QString downloadFolder( Logger& ) ;
+	QString localizationLanguagePath() ;
+	QString localizationLanguage() ;
+	QString commandOnSuccessfulDownload() ;
+	QString commandWhenAllFinished() ;
+	QString themeName() ;
+	QString defaultEngine( settings::tabName,const QString& ) ;
+	QString cookieFilePath( const QString& engineName ) ;
+	QString windowsDimensions( const QString& windowName ) ;
+	QString playlistRangeHistoryLastUsed() ;
+	QString gitHubDownloadUrl() ;
+	const QString& configPaths() ;
+	QString textEncoding() ;
+	QStringList getOptionsHistory( settings::tabName ) ;
+	QStringList playlistRangeHistory() ;
+	QStringList playlistUrlHistory() ;
+
+	QString lastUsedOption( const QString&,settings::tabName ) ;
+
+	QStringList localizationLanguages() ;
+
+	QByteArray highDpiScalingFactor() ;
+
+	QPixmap defaultVideoThumbnailIcon( settings::tabName ) ;
+
+	bool desktopNotifyOnDownloadComplete() ;
+	bool desktopNotifyOnAllDownloadComplete() ;
+	bool libraryShowFolderFirst() ;
+	bool libraryArrangeAscending() ;
+	bool libraryArrangeByDate() ;
+	bool portableVersion() ;
+	bool monitorClipboardUrl( settings::tabName ) ;
+	bool enabledHighDpiScaling() ;
+	bool showTrayIcon() ;
+	bool autoDownload() ;
+	bool downloadOptionsAsLast() ;
+	bool autoDownloadWhenAddedInBatchDownloader() ;
+	bool showVersionInfoAndAutoDownloadUpdates() ;
+	bool showLocalAndLatestVersionInformation() ;
+	bool showLocalVersionInformationOnly() ;
+	bool concurrentDownloading() ;
+	bool showMetaDataInBatchDownloader() ;
+	bool saveHistory() ;
+	bool playlistDownloaderSaveHistory() ;
+	bool singleInstance() ;
+	bool autoSavePlaylistOnExit() ;
+	bool useInternalArchiveFile() ;
+	bool enableLibraryTab() ;
+	bool checkForEnginesUpdates() ;
+	bool autoHideDownloadWhenCompleted() ;
+	bool deleteFilesOnCanceledDownload() ;
+	bool autoSetDefaultEngineAndOptions() ;
+
+	qint64 timeOutWaitingForClipboardData() ;
+
+	Qt::Alignment textAlignment() ;
+	int networkTimeOut() ;
+	int stringTruncationSize() ;
+	int historySize() ;
+	int tabNumber() ;
+	int maxLoggerProcesses() ;
+	int thumbnailWidth( settings::tabName ) ;
+	int thumbnailHeight( settings::tabName ) ;
+	int desktopNotificationTimeOut() ;
+
+	void setOpenWith( const QString& ) ;
+	void setShowLocalVersionInformationOnly( bool ) ;
+	void setShowLocalAndLatestVersionInformation( bool ) ;
+	void setLibraryShowFolderFirst( bool ) ;
+	void setLibraryArrangeAscending( bool ) ;
+	void setLibraryArrangeByDate( bool ) ;
+	void setAutoHideDownloadWhenCompleted( bool ) ;
+	void setCheckForUpdates( bool ) ;
+	void setDesktopNotifyOnDownloadComplete( bool ) ;
+	void setDesktopNotifyOnAllDownloadComplete( bool ) ;
+	void setUseInternalArchiveFile( bool ) ;
+	void clearOptionsHistory( settings::tabName ) ;
+	void addToplaylistRangeHistory( const QString& ) ;
+	void clearPlaylistRangeHistory() ;
+	void clearPlaylistUrlHistory() ;
+	void setAutoSavePlaylistOnExit( bool ) ;
+	void addOptionsHistory( const QString&,settings::tabName ) ;
+	void setshowTrayIcon( bool ) ;
+	void setTheme( QApplication&,const QString& ) ;
+	void setUseSystemProvidedVersionIfAvailable( bool ) ;
+	void setMaxConcurrentDownloads( int ) ;
+	void setTabNumber( int ) ;
+	void setEnableLibraryTab( bool ) ;
+	void setMonitorClipboardUrl( bool,settings::tabName ) ;
+	void setShowMetaDataInBatchDownloader( bool ) ;
+	void setPlaylistDownloaderSaveHistory( bool ) ;
+	void setShowVersionInfoAndAutoDownloadUpdates( bool ) ;
+	void setThemeName( const QString& ) ;
+	void setPlaylistRangeHistoryLastUsed( const QString& ) ;
+	void setHighDpiScalingFactor( const QString& ) ;
+	void setTextEncoding( const QString& ) ;
+	void setlibraryDownloadFolder( const QString& ) ;
+	void setCookieFilePath( const QString& engineName,const QString& cookieFilePath ) ;
+	void setDefaultEngine( const QString&,settings::tabName ) ;
+	void setLastUsedOption( const QString& engineName,const QString& options,settings::tabName ) ;
+	void setDownloadFolder( const QString& ) ;
+	void setLocalizationLanguage( const QString& language ) ;
+	void setWindowDimensions( const QString& window,const QString& dimenstion ) ;
+private:	
+	std::vector< settings::mediaPlayer::PlayerOpts > openWith() ;
+
+	QVariant getValue( const QString& opt,const QVariant& e )
+	{
+		if( !m_settings.contains( opt ) ){
+
+			m_settings.setValue( opt,e ) ;
+		}
+
+		return m_settings.value( opt ) ;
 	}
 
-	static bool portableVersion() ;
-	static QString portableVersionConfigPath() ;
+	QByteArray getOption( const QString& opt,const QByteArray& e )
+	{
+		return this->getValue( opt,e ).toByteArray() ;
+	}
 
-	settings::windowDimensions getWindowDimensions() ;
-	void setWindowDimensions( const settings::windowDimensions& ) ;
-	settings() ;
+	QString getOption( const QString& opt,const QString& e )
+	{
+		return this->getValue( opt,e ).toString() ;
+	}
 
-	bool showCipherFolderAndMountPathInFavoritesList() ;
-	int pollForUpdatesInterval() ;
-	int sshfsBackendTimeout() ;
-	void setWindowsExecutableSearchPath( const QString& ) ;
-	void setExecutableSearchPath( const QString& ) ;
-	QString windowsExecutableSearchPath() ;
-	QString executableSearchPath() ;
-	QString defaultExecutableSearchPath() ;
-	QByteArray windowsKeysStorageData() ;
-	void windowsKeysStorageData( const QByteArray& ) ;
-	QString externalPluginExecutable() ;
-	QString ykchalrespArguments() ;
-	QString portSeparator() ;
-	bool yubikeyRemoveNewLine() ;
-	void setExternalPluginExecutable( const QString& ) ;
-	bool enableRevealingPasswords() ;
-	void scaleGUI() ;
-	void setParent( QWidget * parent,QWidget ** localParent,QDialog * dialog ) ;
-	QString fileManager() ;
-	QStringList openWith() ;
-	QString readPassword( bool addNewLine ) ;
-	QString mountPath() ;
-	QString mountPath( const QString& ) ;
-	QString ConfigLocation() ;
-	QString environmentalVariableVolumeKey() ;
-	bool enableHighDpiScaling() ;
-	void enableHighDpiScaling( bool ) ;
-	void showDebugWindowOnStartup( bool ) ;
-	bool showDebugWindowOnStartup( void ) ;
-	QByteArray enabledHighDpiScalingFactor() ;
-	void enabledHighDpiScalingFactor( const QString& ) ;
-	void removeKey( const QString& ) ;
-	void allowExternalToolsToReadPasswords( bool ) ;
-	bool allowExternalToolsToReadPasswords() ;
-	void setDefaultMountPointPrefix( const QString& ) ;
-	bool startMinimized() ;
-	bool passWordIsUTF8Encoded() ;
-	void setStartMinimized( bool ) ;
-	void setFileManager( const QString& ) ;
-	QString preUnMountCommand() ;
-	void preUnMountCommand( const QString& ) ;
-	void runCommandOnMount( const QString& ) ;
-	QString runCommandOnMount() ;
-	QString runCommandOnInterval() ;
-	void runCommandOnInterval( const QString& ) ;
-	int runCommandOnIntervalTime() ;
-	void runCommandOnIntervalTime( int ) ;
-	bool reUseMountPoint() ;
-	void reUseMountPoint( bool ) ;
-	bool autoOpenFolderOnMount() ;
-	void autoOpenFolderOnMount( bool ) ;
-	bool autoCheck() ;
-	void autoCheck( bool ) ;
-	bool readOnlyWarning() ;
-	void readOnlyWarning( bool ) ;
-	bool doNotShowReadOnlyWarning() ;
-	void doNotShowReadOnlyWarning( bool ) ;
-	bool autoMountFavoritesOnStartUp() ;
-	bool useDarkMode() ;
-	void useDarkMode( bool ) ;
-	void autoMountFavoritesOnStartUp( bool ) ;
-	void autoMountFavoritesOnAvailable( bool ) ;
-	bool autoMountFavoritesOnAvailable() ;
-	void showFavoritesInContextMenu( bool ) ;
-	bool showFavoritesInContextMenu( void ) ;
-	int networkTimeOut() ;
-	bool showMountDialogWhenAutoMounting() ;
-	bool showUnlockedVolumesFromAllUsers() ;
-	int checkForUpdateInterval() ;
-	int windowsPbkdf2Interations() ;
-	bool ecryptfsAllowNotEncryptingFileNames() ;
-	QString homePath() ;
-	QString windowsMountPointPath() ;
-	bool windowsUseMountPointPath( const engines::engine& ) ;
-	void clearFavorites() ;
-	void showMountDialogWhenAutoMounting( bool ) ;
-	int favoritesEntrySize() ;
-	void setLocalizationLanguage( const QString& language ) ;
-	QString localizationLanguage( );
-	QString walletName( LXQt::Wallet::BackEnd ) ;
-	settings::walletBackEnd autoMountBackEnd() ;
-	void autoMountBackEnd( const settings::walletBackEnd& ) ;
-	QSettings& backend();
-	bool setOpenVolumeReadOnly( QWidget * parent,bool checked ) ;
-	bool getOpenVolumeReadOnlyOption() ;
-	bool readFavorites( QMenu * m ) ;
-	QString localizationLanguagePath() ;
-	void languageMenu( QMenu * m,QAction * ac,settings::translator& ) ;
-	void setLocalizationLanguage( bool translate,QMenu * m,settings::translator& ) ;
-	QString walletName( void ) ;
-	QString applicationName( void ) ;
-	int readPasswordMaximumLength() ;
-	bool unMountVolumesOnLogout( void ) ;
-	QStringList mountMonitorFolderPaths( void ) ;
-	QStringList supportedFileSystemsOnMountPaths( void ) ;
-	QString gvfsFuseMonitorPath( void ) ;
-	int mountMonitorFolderPollingInterval( void ) ;
-	int delayBeforeAutoMountAtStartup() ;
-private:
+	bool getOption( const QString& opt,bool e )
+	{
+		return this->getValue( opt,e ).toBool() ;
+	}
+
+	int getOption( const QString& opt,int e )
+	{
+		return this->getValue( opt,e ).toInt() ;
+	}
+
+	QStringList getOption( const QString& opt,const QStringList& e )
+	{
+		return this->getValue( opt,e ).toStringList() ;
+	}
+
+	QString downloadFolder( Logger * ) ;
+
+	struct options
+	{
+		options( const utility::cliArguments& ) ;
+
+		const QString& dataPath() const
+		{
+			return m_dataPath ;
+		}
+		const QString& windowsOnly3rdPartyBinPath() const
+		{
+			return m_exe3PartyBinPath ;
+		}
+		const QString windowsOnlyExePath() const
+		{
+			return m_exePath ;
+		}
+		const QString& windowsOnlyDefaultPortableVersionDownloadFolder() const
+		{
+			return m_defaultPortableVersionDownloadFolder ;
+		}
+		bool portableVersion() const
+		{
+			return m_portableVersion ;
+		}
+		QString m_dataPath ;
+		QString m_exePath ;
+		QString m_exe3PartyBinPath ;
+		QString m_defaultPortableVersionDownloadFolder ;
+		bool m_portableVersion ;
+	} ;
+
+	options m_options ;
+
+	bool m_EnableHighDpiScaling ;
 	std::unique_ptr< QSettings > m_settingsP ;
 	QSettings& m_settings ;
-	bool m_portableVersion ;
 };
 
-#endif //SETTINGS_H
+#endif
