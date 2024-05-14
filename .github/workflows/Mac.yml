@@ -43,4 +43,4 @@ jobs:
       run: |
           cmake --build ${{github.workspace}}/MAC/build6
           ls ${{github.workspace}}/MAC/build6
-          ${{github.workspace}}/MAC
+          ls ${{github.workspace}}/MAC
