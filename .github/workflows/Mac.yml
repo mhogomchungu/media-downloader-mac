@@ -47,3 +47,4 @@ jobs:
           echo --------------
           ls ${{github.workspace}}/MAC
           echo --------------
+          ls ${{github.workspace}}
