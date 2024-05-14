@@ -42,12 +42,10 @@ jobs:
       name: Build
       run: cmake --build ${{github.workspace}}/MAC/build6
     - 
+      name: Install
+      run: cmake --install ${{github.workspace}}/MAC/build6
+    - 
       name: Make bundle
       run: |
-             ls ${{github.workspace}}/qt6/Qt/${{ env.QT6_VERSION }}/macos/bin/*
-             echo "--------------"
-             mkdir ${{github.workspace}}/MediaDownloader.app
-             cp ${{github.workspace}}/MAC/build6/media-downloader ${{github.workspace}}/MediaDownloader.app/
-             cd ${{github.workspace}}/MediaDownloader.app
-             ${{github.workspace}}/qt6/Qt/${{ env.QT6_VERSION }}/macos/bin/macdeployqt media-downloader -dmg
-             ls ${{github.workspace}}/*
+             cd ${{github.workspace}}/media-downloader
+             ${{github.workspace}}/qt6/Qt/${{ env.QT6_VERSION }}/macos/bin/macdeployqt6 media-downloader.app 
