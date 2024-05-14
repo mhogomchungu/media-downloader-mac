@@ -6,6 +6,8 @@ endif()
 
 project(media-downloader LANGUAGES CXX)
 
+message("checking system: ${CMAKE_SYSTEM_NAME}")
+
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     message("Building for apple")
     set(APPLE TRUE)
