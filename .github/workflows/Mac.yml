@@ -31,7 +31,6 @@ jobs:
     -
       name: Check presence of supporting tools
       run: |
-          which windeployqt6
           which clang++
           clang++ --version
     -
