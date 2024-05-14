@@ -38,15 +38,6 @@ else()
     message("-- Building With Qt5")
 endif()
 
-message("-- checking system: ${CMAKE_SYSTEM_NAME}")
-
-if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-    message("-- Building for apple")
-    set(APPLE TRUE)
-else()
-    message("-- Not Building for apple")
-endif()
-
 include_directories(${PROJECT_BINARY_DIR})
 
 # uninstall target
@@ -122,13 +113,13 @@ if(WIN32)
     add_executable(media-downloader WIN32 ${SRC} ${MOC_FILES} ${UI_FILES} ${RESOURCES} ${APP_ICON_RESOURCE_WINDOWS})
     set_target_properties(media-downloader PROPERTIES COMPILE_FLAGS "-Wextra -Wall -s -pedantic")
 else()
-    set_target_properties(media-downloader PROPERTIES COMPILE_FLAGS "-Wextra -Wall -s -fPIC -pedantic")
     if(APPLE)
         set_target_properties(media-downloader PROPERTIES  MACOSX_BUNDLE ON)
 	add_executable(media-downloader MACOSX_BUNDLE ${SRC} ${MOC_FILES} ${UI_FILES} ${RESOURCES})
     else()
         add_executable(media-downloader ${SRC} ${MOC_FILES} ${UI_FILES} ${RESOURCES})
     endif()
+        set_target_properties(media-downloader PROPERTIES COMPILE_FLAGS "-Wextra -Wall -s -fPIC -pedantic")
 endif()
 
 if(BUILD_WITH_QT6)
