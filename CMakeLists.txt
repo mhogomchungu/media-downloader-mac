@@ -115,6 +115,9 @@ if(WIN32)
 else()
     add_executable(media-downloader ${SRC} ${MOC_FILES} ${UI_FILES} ${RESOURCES})
     set_target_properties(media-downloader PROPERTIES COMPILE_FLAGS "-Wextra -Wall -s -fPIC -pedantic")
+    if(APPLE)
+        set_target_properties(media-downloader PROPERTIES  MACOSX_BUNDLE ON)
+    endif()
 endif()
 
 if(BUILD_WITH_QT6)
@@ -358,4 +361,33 @@ Name: \"turkish\"             ; MessagesFile: \"compiler:Languages\\Turkish.isl\
 Name: \"ukrainian\"           ; MessagesFile: \"compiler:Languages\\Ukrainian.isl\"
 ")
 
+endif()
+
+if( APPLE )
+
+    SET( plugin_dest_dir sirikali.app/Contents/MacOS )
+    SET( qtconf_dest_dir sirikali.app/Contents/Resources )
+    SET( APPS "\${CMAKE_INSTALL_PREFIX}/media-downloader.app" )
+
+    set_target_properties( media-downloader PROPERTIES MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/src/MacOSXBundleInfo.plist.in" )
+
+    install( TARGETS media-downloader BUNDLE DESTINATION . COMPONENT Runtime )
+
+    file( COPY src/media-downloader.icns DESTINATION "sirikali.app/Contents/Resources/" )
+    file( COPY translations/ar.qm DESTINATION "sirikali.app/Contents/Resources/" )
+    file( COPY translations/de_DE.qm DESTINATION "sirikali.app/Contents/Resources/" )
+    file( COPY translations/en_US.qm DESTINATION "sirikali.app/Contents/Resources/" )
+    file( COPY translations/es.qm DESTINATION "sirikali.app/Contents/Resources/" )
+    file( COPY translations/fr_FR.qm DESTINATION "sirikali.app/Contents/Resources/" )
+    file( COPY translations/it_IT.qm DESTINATION "sirikali.app/Contents/Resources/" )
+    file( COPY translations/ja_JP.qm DESTINATION "sirikali.app/Contents/Resources/" )
+    file( COPY translations/nl_NL.qm DESTINATION "sirikali.app/Contents/Resources/" )
+    file( COPY translations/pl_PL.qm DESTINATION "sirikali.app/Contents/Resources/" )
+    file( COPY translations/pt_BR.qm DESTINATION "sirikali.app/Contents/Resources/" )
+    file( COPY translations/ru_RU.qm DESTINATION "sirikali.app/Contents/Resources/" )
+    file( COPY translations/sv_SE.qm DESTINATION "sirikali.app/Contents/Resources/" )
+    file( COPY translations/tr_TR.qm DESTINATION "sirikali.app/Contents/Resources/" )
+    file( COPY translations/zh_CN.qm DESTINATION "sirikali.app/Contents/Resources/" )
+
+    file( COPY changelog DESTINATION "media-downloader.app/Contents/Resources/" )
 endif()
