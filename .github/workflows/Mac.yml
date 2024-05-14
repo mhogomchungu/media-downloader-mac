@@ -46,8 +46,8 @@ jobs:
       run: |
              ls ${{github.workspace}}/qt6/Qt/${{ env.QT6_VERSION }}/macos/bin/*
              echo "--------------"
-             mkdir ${{github.workspace}}/MediaDownloader
-             cp ${{github.workspace}}/MAC/build6/media-downloader ${{github.workspace}}/MediaDownloader/
-             cd ${{github.workspace}}/MediaDownloader
-             ${{github.workspace}}/qt6/Qt/${{ env.QT6_VERSION }}/macos/bin/macdeployqt media-downloader
-             ls ${{github.workspace}}/MediaDownloader
+             mkdir ${{github.workspace}}/MediaDownloader.app
+             cp ${{github.workspace}}/MAC/build6/media-downloader ${{github.workspace}}/MediaDownloader.app/
+             cd ${{github.workspace}}/MediaDownloader.app
+             ${{github.workspace}}/qt6/Qt/${{ env.QT6_VERSION }}/macos/bin/macdeployqt media-downloader -dmg
+             ls ${{github.workspace}}/*
