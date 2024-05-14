@@ -48,4 +48,13 @@ jobs:
       name: Make bundle
       run: |
              cd ${{github.workspace}}/media-downloader
-             ${{github.workspace}}/qt6/Qt/${{ env.QT6_VERSION }}/macos/bin/macdeployqt6 media-downloader.app 
+             ${{github.workspace}}/qt6/Qt/${{ env.QT6_VERSION }}/macos/bin/macdeployqt6 media-downloader.app --verbose
+    -  
+      name: Post Bundle
+      uses: ncipollo/release-action@v1
+      with:
+        artifacts: ${{github.workspace}}/media-downloader/media-downloader.app
+        tag: "0.0.0"
+        commit: "main"
+        allowUpdates: true
+        body: "Mac build"
