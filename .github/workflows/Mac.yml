@@ -16,7 +16,7 @@ jobs:
     -
       uses: actions/checkout@v4
       with:
-         repository: mhogomchungu/media-downloader
+         repository: mhogomchungu/media-downloader-mac
          path: MAC
     -
       name: Install Qt6
