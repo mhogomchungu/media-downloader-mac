@@ -41,6 +41,11 @@ jobs:
     - 
       name: Build
       run: cmake --build ${{github.workspace}}/MAC/build6
+    - name: Show Bundle contents
+      run: |
+          ls ${{github.workspace}}/MAC/build6/media-downloader.app/*
+          echo "---------------"
+          ls ${{github.workspace}}/MAC/build6/media-downloader.app/Contents*
     -  
       name: Build Bundle
       run: |
