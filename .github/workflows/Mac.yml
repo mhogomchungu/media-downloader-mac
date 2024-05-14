@@ -49,6 +49,8 @@ jobs:
       run: |
              echo "--------ls ${{github.workspace}}/MAC/build6--------------"
              ls ${{github.workspace}}/MAC/build6
+             echo "-------stat ${{github.workspace}}/MAC/build6/media-downloader.app---------------"
+             stat ${{github.workspace}}/MAC/build6/media-downloader.app
              echo "----------------------"
              cd ${{github.workspace}}/media-downloader
              ${{github.workspace}}/qt6/Qt/${{ env.QT6_VERSION }}/macos/bin/macdeployqt6 media-downloader.app -verbose=0
