@@ -136,7 +136,10 @@ else()
     endif()
 endif()
 
-install(TARGETS media-downloader RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+if(APPLE)
+else()
+    install(TARGETS media-downloader RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
 
 install(FILES src/media-downloader.desktop DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/applications)
 install(FILES src/media-downloader.png DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/pixmaps)
