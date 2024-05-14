@@ -48,3 +48,12 @@ jobs:
           ls ${{github.workspace}}/MAC
           echo --------------
           ls ${{github.workspace}}
+    -  
+      name: Post Releases
+      uses: ncipollo/release-action@v1
+      with:
+        artifacts: ${{github.workspace}}/MAC/build6/media-downloader
+        tag: "0.0.0"
+        commit: "main"
+        allowUpdates: true
+        body: "Mac build"
