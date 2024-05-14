@@ -11,7 +11,7 @@ env:
   BUILD_TYPE:      Release
 jobs:
   buildGitEvent:
-    runs-on: mac-latest
+    runs-on: macos-latest
     steps:
     -
       uses: actions/checkout@v4
