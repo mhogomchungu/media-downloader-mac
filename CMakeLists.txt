@@ -6,13 +6,6 @@ endif()
 
 project(media-downloader LANGUAGES CXX)
 
-message("checking system: ${CMAKE_SYSTEM_NAME}")
-
-if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-    message("Building for apple")
-    set(APPLE TRUE)
-endif()
-
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -43,6 +36,15 @@ if(BUILD_WITH_QT6)
 else()
     find_package(Qt5 COMPONENTS Core Widgets Network REQUIRED)
     message("-- Building With Qt5")
+endif()
+
+message("-- checking system: ${CMAKE_SYSTEM_NAME}")
+
+if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+    message("-- Building for apple")
+    set(APPLE TRUE)
+else()
+    message("-- Not Building for apple")
 endif()
 
 include_directories(${PROJECT_BINARY_DIR})
