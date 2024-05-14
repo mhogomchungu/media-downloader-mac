@@ -6,6 +6,10 @@ endif()
 
 project(media-downloader LANGUAGES CXX)
 
+if(APPLE)
+    message("Building for apple")
+endif()
+
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
