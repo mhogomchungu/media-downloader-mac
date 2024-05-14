@@ -1,13 +1,16 @@
-name: Repository Dispatch
+name: buildGit
+
+on:
+  push:
+    branches:
+    - master
+    tags-ignore:
+    - '*'
 env:
   QT6_VERSION:     "6.6.2"
-
   BUILD_TYPE:      Release
-on:
-  repository_dispatch:
-    types: [PublishGit]
 jobs:
-  myEvent:
+  buildGitEvent:
     runs-on: mac-latest
     steps:
     -
@@ -39,5 +42,7 @@ jobs:
       name: Configure CMake
       env:
         CMAKE_PREFIX_PATH: "${{github.workspace}}/qt6/Qt/${{ env.QT6_VERSION }}"
-        msystem: MINGW32
       run: cmake -DOUTPUT_BASE_NAME=MediaDownloaderQt6 -DLIBRARIES_LOCATION=${{github.workspace}}\MediaDownloader.git\ -DOUTPUT_PATH=${{github.workspace}}\ -DSOURCE_PATH=${{github.workspace}}\MAC\ -DCMAKE_VERBOSE_MAKEFILE=TRUE -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -G "CodeBlocks - MinGW Makefiles" -S ${{github.workspace}}/MAC/ -B ${{github.workspace}}/MAC/build6
+    - name: Build
+      run: cmake --build ${{github.workspace}}\MAC
+    
