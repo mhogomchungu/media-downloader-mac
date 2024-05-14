@@ -44,9 +44,7 @@ jobs:
     -  
       name: Build Bundle
       run: |
-         "${{github.workspace}}/qt6/Qt/${{ env.QT6_VERSION }}/macos/bin/macdeployqt6 ${{github.workspace}}/MAC/build6/media-downloader.app
-          echo "------${{github.workspace}}/MAC/build6/*-------
-          ls ${{github.workspace}}/MAC/build6/*
+         "${{github.workspace}}/qt6/Qt/${{ env.QT6_VERSION }}/macos/bin/macdeployqt6 ${{github.workspace}}/MAC/build6/media-downloader.app -verbose=1
     -
       name: Post Bundle
       uses: ncipollo/release-action@v1
