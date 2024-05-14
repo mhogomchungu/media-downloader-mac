@@ -31,8 +31,8 @@ jobs:
     -
       name: Check clang version and path for Qt6
       run: |
-          Write-Output (Get-Command clang++.exe).Path
-          clang++.exe --version
+          which clang++
+          clang++ --version
     -
       name: Download libs
       run: |
