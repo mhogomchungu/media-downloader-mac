@@ -29,15 +29,28 @@ jobs:
         host: 'mac'
         target: 'desktop'
     -
-      name: Check clang version and path for Qt6
+      name: Check presence of supporting tools
       run: |
+          which windeployqt6
           which clang++
           clang++ --version
     -
       name: Configure CMake
       env:
         CMAKE_PREFIX_PATH: "${{github.workspace}}/qt6/Qt/${{ env.QT6_VERSION }}"
-      run: cmake -DOUTPUT_BASE_NAME=MediaDownloaderQt6 -DLIBRARIES_LOCATION=${{github.workspace}}\MediaDownloader.git\ -DOUTPUT_PATH=${{github.workspace}}\ -DSOURCE_PATH=${{github.workspace}}\MAC\ -DCMAKE_VERBOSE_MAKEFILE=TRUE -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -G "CodeBlocks - MinGW Makefiles" -S ${{github.workspace}}/MAC/ -B ${{github.workspace}}/MAC/build6
-    - name: Build
+      run: cmake -DOUTPUT_BASE_NAME=MediaDownloaderQt6 -DLIBRARIES_LOCATION=${{github.workspace}}/MediaDownloader.git/ -DOUTPUT_PATH=${{github.workspace}}/ -DSOURCE_PATH=${{github.workspace}}/MAC/ -DCMAKE_VERBOSE_MAKEFILE=TRUE -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -S ${{github.workspace}}/MAC/ -B ${{github.workspace}}/MAC/build6
+    - 
+      name: Build
       run: cmake --build ${{github.workspace}}\MAC
-    
+    -
+      name: Create MediaDownloaderQt6
+      run: |
+        mkdir ${{github.workspace}}/MediaDownloaderQt6.git
+        mkdir ${{github.workspace}}/MediaDownloaderQt6.git/local
+
+        cp -r ${{github.workspace}}/MAC/translations ${{github.workspace}}/MediaDownloaderQt6/
+        cp ${{github.workspace}}/MAC/build6/media-downloader ${{github.workspace}}/MediaDownloaderQt6/
+
+        cd ${{github.workspace}}/MediaDownloaderQt6
+
+        ${{github.workspace}}/qt5/Qt/${{ env.QT6_VERSION }}/clang_64/bin/windeployqt6 ${{github.workspace}}/MediaDownloaderQt6/media-downloader
