@@ -34,11 +34,6 @@ jobs:
           which clang++
           clang++ --version
     -
-      name: Download libs
-      run: |
-         mkdir ${{github.workspace}}\tmp
-         Invoke-WebRequest "https://github.com/mhogomchungu/media-downloader-git/releases/download/0.0.0/3rdParty.zip" -OutFile ${{github.workspace}}\tmp\3rdParty.zip
-    -
       name: Configure CMake
       env:
         CMAKE_PREFIX_PATH: "${{github.workspace}}/qt6/Qt/${{ env.QT6_VERSION }}"
