@@ -41,15 +41,3 @@ jobs:
     - 
       name: Build
       run: cmake --build ${{github.workspace}}/MAC/build6
-    -
-      name: Create MediaDownloaderQt6
-      run: |
-        mkdir ${{github.workspace}}/MediaDownloaderQt6.git
-        mkdir ${{github.workspace}}/MediaDownloaderQt6.git/local
-
-        cp -r ${{github.workspace}}/MAC/translations ${{github.workspace}}/MediaDownloaderQt6/
-        cp ${{github.workspace}}/MAC/build6/media-downloader ${{github.workspace}}/MediaDownloaderQt6/
-
-        cd ${{github.workspace}}/MediaDownloaderQt6
-
-        ${{github.workspace}}/qt6/Qt/${{ env.QT6_VERSION }}/clang_64/bin/windeployqt6 ${{github.workspace}}/MediaDownloaderQt6/media-downloader
