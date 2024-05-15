@@ -49,12 +49,12 @@ jobs:
       run: ${{github.workspace}}/qt6/Qt/${{ env.QT6_VERSION }}/macos/bin/macdeployqt6 ${{github.workspace}}/MAC/build6/media-downloader.app -dmg
     -
       name: Zip app
-      run: 7z a ${{github.workspace}}/MAC/build6/media-downloader.zip ${{github.workspace}}/MAC/build6/media-downloader.app 
+      run: 7z a ${{github.workspace}}/MAC/build6/media-downloader.app.zip ${{github.workspace}}/MAC/build6/media-downloader.app 
     -
       name: Post Bundle
       uses: ncipollo/release-action@v1
       with:
-        artifacts: ${{github.workspace}}/MAC/build6/media-downloader.dmg ${{github.workspace}}/MAC/build6/media-downloader.zip
+        artifacts: ${{github.workspace}}/MAC/build6/media-downloader.dmg,${{github.workspace}}/MAC/build6/media-downloader.app.zip
         tag: "0.0.0"
         commit: "main"
         allowUpdates: true
